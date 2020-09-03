@@ -1,0 +1,8 @@
+# This is a simple DVS database
+# It will be seen in a lot of places
+# This version on the server has an extra metadata line
+ID, Favorite Color
+1,Red
+2,Blue
+3,Green
+4,Purple
