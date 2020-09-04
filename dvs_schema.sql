@@ -1,24 +1,48 @@
+drop table if exists dvs_hashes;
 CREATE TABLE `dvs_hashes` (
     `hashid` int(11) NOT NULL AUTO_INCREMENT,
     `hexhash` varchar(256) NOT NULL,
+    etag varchar(32),
+     equivallent_hashid int (11),
     PRIMARY KEY (`hashid`),
-    index  (hexhash)
+    unique index (etag),
+    unique index  (hexhash)
 ) ENGINE=InnoDB CHARSET=ascii;
-/*!40101 SET character_set_client = @saved_cs_client */;
+
+create table dvs_hosts (
+  hostid int not null auto_increment,
+  hostname varchar(256) not null,
+  primary key (hostid),
+  unique index (hostname)
+) engine=innodb charset=ascii;
+
+create table dvs_dirnames (
+  dirnameid int not null auto_increment,
+  dirname varchar(256) not null,
+  primary key (dirnameid),
+  unique index (dirname)
+) engine=innodb charset=ascii;
+
+create table dvs_filenames (
+  filenameid int not null auto_increment,
+  filename varchar(256) not null,
+  primary key (filenameid),
+  unique index (filename)
+) engine=innodb charset=ascii;
 
 CREATE TABLE dvs_hashsets (
   id int not null auto_increment,
   hashset_hashid int not null,
   hashid int not null,
   primary key (id),
-  index (hashset_hashid,hashid),
+  unique index (hashset_hashid,hashid),
   index (hashid)
 ) engine=innodb;
 
 
 CREATE TABLE dvs_notes (
   noteid int not null auto_increment,
-  t timestamp not null default current_timestamp,
+  created timestamp not null default current_timestamp,
   modified timestamp not null default current_timestamp on update current_timestamp,
   hashid int not null,
   author varchar(128),
@@ -30,40 +54,24 @@ CREATE TABLE dvs_notes (
   fulltext index (note)
 ) engine=innodb charset=utf8;
 
-create table dvs_actions (
-  actionid int not null auto_increment,
-  t timestamp not null default current_timestamp,
+create table dvs_updates (
+  updateid int not null auto_increment,
+  created timestamp not null default current_timestamp,
   modified timestamp not null default current_timestamp on update current_timestamp,
-  action JSON,
-  hashid int not null,
-  primary key (actionid),
-  index (t),
-  index (modified),
-  foreign key (hashid) references dvs_hashes(hashid) on update cascade
-) engine=innodb;
-
-create table dvs_hosts (
-  hostid int not null auto_increment,
-  hostname varchar(256) not null,
-  primary key (hostid),
-  index (hostname)
-) engine=innodb charset=ascii;
-
-create table dvs_files (
-  fileid int not null auto_increment,
-  t timestamp not null default current_timestamp,
-  modified timestamp not null default current_timestamp on update current_timestamp,
-  hostid int not null,
-  dirname varchar(4096),
-  filename varchar(4096),
   metadata JSON,
   metadata_mtime int as (JSON_UNQUOTE(metadata->"$.st_mtime")),
-  hashid int,
-  primary key (fileid),
+  hashid int not null,
+  hostid int not null,
+  dirnameid int,
+  filenameid int,
+  primary key (updateid),
   index (t),
   index (modified),
-  index (pathname),
-  index (hashid),
   index (metadata_mtime),
-  foreign key (hashid) references dvs_hashes(hashid) on update cascade
-) engine=innodb charset=utf-8;
+  index (hashid,hostid),
+  foreign key (hashid) references dvs_hashes(hashid),
+  foreign key (hostid) references dvs_hosts(hostid),
+  foreign key (dirnameid) references dvs_dirnames(dirnameid),
+  foreign key (filenameid) references dvs_filenames(filenameid)
+) engine=innodb;
+
