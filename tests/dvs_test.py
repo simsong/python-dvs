@@ -21,6 +21,7 @@ from dvs.dvs_constants import *
 import dvs
 
 def test_get_file_update():
+    warnings.filterwarnings("ignore", module="bottle")
     assert os.path.exists(DVS_DEMO_PATH)
     update = dvs.get_file_update(DVS_DEMO_PATH)
     assert update[FILENAME]==DVS_DEMO_FILE

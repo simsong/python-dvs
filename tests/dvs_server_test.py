@@ -6,6 +6,7 @@ import urllib.request
 import logging
 import warnings
 import pytest
+import time
 """
 Test programs for the dvsserver both without and with the bottle server.
 """
@@ -18,9 +19,12 @@ import dvs.dvs_server
 
 # local directory:
 from dvs_test import DVS_DEMO_FILE,DVS_DEMO_PATH
+from dvs.dvs_constants import *
+
 
 @pytest.fixture
 def dbwriter_auth():
+    warnings.filterwarnings("ignore", module="bottle")
     try:
         import webmaint
     except ImportError:
@@ -29,9 +33,24 @@ def dbwriter_auth():
     yield webmaint.get_auth_dbwriter()
 
 def test_do_file_update(dbwriter_auth):
+    warnings.filterwarnings("ignore", module="pymysql.cursors")
+    warnings.filterwarnings("ignore", module="bottle")
     if dbwriter_auth is None:
         warnings.warn("Cannot run without webmaint")
         return
     
     update = dvs.get_file_update(DVS_DEMO_PATH)
     dvs.dvs_server.do_update(dbwriter_auth, update)
+
+def test_do_note(dbwriter_auth):
+    warnings.filterwarnings("ignore", module="pymysql.cursors")
+    update = dvs.get_file_update(DVS_DEMO_PATH)
+    note = f"This is note {int(time.time())}"
+    dvs.dvs_server.add_note(dbwriter_auth, update[HEXHASH], os.environ['USER'], note)
+
+    notes = dvs.dvs_server.get_notes(dbwriter_auth, update[HEXHASH])
+    for n in notes:
+        if n['note']==note:
+            return True
+    raise RuntimeError(f"Could not find note '{note}' in '{notes}'")
+        

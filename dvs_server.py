@@ -34,6 +34,20 @@ def do_search(auth, *, search):
         return dbfile.DBMySQL.csfr(auth, cmd, vals, asDicts=True)
     return []
 
+def get_hashid(auth, hexhash, etag):
+    dbfile.DBMySQL.csfr(auth,"INSERT IGNORE into dvs_hashes (hexhash,etag) values (%s,%s)",
+                        (hexhash,etag))
+
+    res = dbfile.DBMySQL.csfr(auth,"SELECT hashid,etag from dvs_hashes where hexhash=%s",(hexhash,))
+    # handle the case where we didn't know the etag previously but we do now
+    (hashid,etag_) = res[0]
+    if etag_!=etag and (etag is not None):
+        if len(etag_<16):
+            warnings.warn("Changing hashid %d etag from %s to %s",hashid,str(etag_),str(etag))
+            dbfile.DBMySQL.csfr(auth,"UPDATE dvs_hashes set etag=%s where hashid=%s",(etag,hashid))
+    return hashid
+
+
 def do_update(auth, update):
     """
     """
@@ -43,14 +57,12 @@ def do_update(auth, update):
     assert HOSTNAME in update
     assert TIME in update
     dbfile.DBMySQL.csfr(auth,"INSERT IGNORE into dvs_hosts  (hostname) values (%s)",(update[HOSTNAME],))
-    dbfile.DBMySQL.csfr(auth,"INSERT IGNORE into dvs_hashes (hexhash,etag) values (%s,%s)",
-                        (update[HEXHASH],update[ETAG]))
 
     hostid = dbfile.DBMySQL.csfr(auth,"SELECT hostid from dvs_hosts where hostname=%s",
                                  (update[HOSTNAME],))[0][0]
 
-    hashid = dbfile.DBMySQL.csfr(auth,"SELECT hashid from dvs_hashes where hexhash=%s",
-                                 (update[HEXHASH],))[0][0]
+    hashid = get_hashid(auth, update[HEXHASH], update.get(ETAG,None))
+
 
     cmd = """
         SELECT * from dvs_updates 
@@ -100,6 +112,15 @@ def do_update(auth, update):
                             (str(json.dumps(newmd,default=str)),res[0]['updateid']))
 
              
+
+def add_note(auth,hexhash,author,note):
+    dbfile.DBMySQL.csfr(auth,"INSERT INTO dvs_notes (hashid,author,note) values (%s,%s,%s)",
+                        (get_hashid(auth,hexhash,None), author, note))
+
+def get_notes(auth,hexhash):
+    """Right now this gets all the notes. It should probably get a set of them"""
+    return dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_notes where hashid=%s",
+                               (get_hashid(auth,hexhash,None)),asDicts=True)
 
 def search_api(auth):
     """Bottle interface for search. Keep everything that has to do with bottle here so that we can implement unit tests"""
