@@ -6,28 +6,36 @@ dvsserver
 """
 
 import os
+import sys
 import random
 import bottle
 import json
 import warnings
 from bottle import request,response
 
+# Get 'ctools' into the path
+sys.path.append( os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# Until this is properly packaged, just put . into the path
+sys.path.append( os.path.dirname(__file__ ))
+
+
 from ctools import dbfile
 from ctools import tydoc
 import webmaint
 
-from .dvs_constants import *
+from dvs_constants import *
 
 def do_search(auth, *, search):
-    cmd = "SELECT * from dvs_files WHERE "
+    cmd = "SELECT * from dvs_updates WHERE "
     wheres = []
     vals   = []
-    if 'pathname' in query:
-        wheres.append('filename==%s ')
-        vals.append(os.path.basename(query['pathname']))
-    if HEXHASH in query:
+    if 'filename' in search:
+        wheres.append('filenameid in (select filenameid from dvs_filenames where filename=%s )')
+        vals.append(search['filename'])
+    if HEXHASH in search:
         whereas.append('hashid in (select hashid from dvs_hashes where hexhash=%s)')
-        vals.append(query['sha1'])
+        vals.append(search['sha1'])
     
     if wheres:
         cmd = cmd + "AND".join(wheres) 
@@ -125,18 +133,20 @@ def get_notes(auth,hexhash):
 def search_api(auth):
     """Bottle interface for search. Keep everything that has to do with bottle here so that we can implement unit tests"""
     try:
-        search = json.loads(bottle.request.params.searchs)
+        searches = json.loads(bottle.request.params.searches)
     except json.decoder.JSONDecodeError:
         response.status = 404
-        return "searchs parameter is not a valid JSON value"
-    if not isinstance(search,list):
+        if len(bottle.request.params.searches)==0:
+            return f"searches parameter was not supplied"
+        return f"searches parameter ({bottle.request.params.searches}) is not a valid JSON value"
+    if not isinstance(searches,list):
         response.status = 404
-        return f"Searchs parameter must be a JSON-encoded list"
+        return f"Searches parameter must be a JSON-encoded list"
     if any([isinstance(obj,dict) is False for obj in searches]):
         response.status = 404
         return f"Searches parameter must be a JSON-encoded list of dictionaries"
     results = [{'search':search,
-                'result':do_search(search)} for search in searches]
+                'result':do_search(auth,search=search)} for search in searches]
     response.content_type = 'text/json'
     return json.dumps(results,default=str)
 
