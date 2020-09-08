@@ -60,7 +60,7 @@ class SingletonCounter():
         return sc.instance.count
 
         
-def do_register(paths, *, message=None, dataset=None):
+def do_register(paths, *, note=None, dataset=None):
     # Send the list of paths to the server and ask if the mtime for any of them are known
     # We make a search_dictionary, which is the search object for each of the paths passed in,
     # indexed by path
@@ -89,13 +89,19 @@ def do_register(paths, *, message=None, dataset=None):
                 response_mtime = None
             updates.append(get_file_update( search[PATH], response_mtime))
 
-    # Finally, send the updates to the server with the message
-    # If there is only a single update, send the message with it. 
-    # If there are multiple updates and a message or a dataset, create an update for the dataset, give the dataset
-    # that message, and send it as well
+    # Finally, send the updates to the server with the note
+    # If there is only a single update, send the note with it. 
+    # If there are multiple updates and a note or a dataset, create an update for the dataset, give the dataset
+    # that note, and send it as well
     if len(updates)!=1:
         raise RuntimeError("Currently we handle just a single dataset")
     
+    if note:
+        updates[0][NOTE] = note
+        updates[0][AUTHOR] = os.getenv('USER')
+    if dataset:
+        updates[0][DATASET] = dataset
+
     logging.debug("updates:\n %s",json.dumps(updates,indent=4))
     r = requests.post(ENDPOINTS[UPDATE], 
                       data={'updates':json.dumps(updates, default=str)},
@@ -115,15 +121,44 @@ def do_search(paths, debug=False):
                       data=data, 
                       verify=VERIFY)
     logging.debug("status=%s text: %s",r.status_code, r.text)
-    return r.json()
+    if r.status_code==HTTP_OK:
+        return r.json()
+    raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
     
+def render_search(obj):
+    count = 0
+    FMT = "{:20}: {}"
+    for result in obj[RESULTS]:
+        if count>0:
+            print("   ---   ")
+        for (k,v) in sorted(result.items()):
+            if k==NOTES:
+                continue
+            elif k==METADATA:
+                for (kk,vv) in json.loads(v).items():
+                    if kk==ST_SIZE:
+                        print(FMT.format('size',vv))
+                    elif kk==ST_MTIME:
+                        print(FMT.format('mtime',time.asctime(time.localtime(vv))))
+                    elif kk==ST_CTIME:
+                        print(FMT.format('ctime',time.asctime(time.localtime(vv))))
+            elif k==METADATA_MTIME:
+                print(FMT.format(METADATA_MTIME,time.asctime(time.localtime(v))))
+            else:
+                print(FMT.format(k,v))
+        if NOTES in result:
+            for note in sorted(result[NOTES],key=lambda note:note[CREATED]):
+                print(note[CREATED],note[AUTHOR],note[NOTE])
+        count += 1
+        
+    print("")
 
 
 if __name__ == "__main__":
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("path", nargs='*', help="One or more files or directories to process")
-    parser.add_argument("-m", "--message", help="Message when registering the presence of a file")
+    parser.add_argument("-m", "--message", help="Note when registering the presence of a file")
     parser.add_argument("--dataset", help="Specifies the name of a dataset when registering a file")
     parser.add_argument("--debug", action='store_true')
     parser.add_argument("--garfi303", action='store_true')
@@ -137,11 +172,8 @@ if __name__ == "__main__":
     if args.garfi303:
         set_debug_endpoints("~garfi303adm/html/")
 
-    print("path:",args.path)
     if args.search:
         for search in do_search(args.path):
-            print(f"{search}:")
             print(render_search(search))
-            print("")
     else:
-        do_register(args.path, message=args.message, dataset=args.dataset)
+        do_register(args.path, note=args.note, dataset=args.dataset)

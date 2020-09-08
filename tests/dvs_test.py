@@ -45,8 +45,8 @@ def do_register():
     """Register one of the test files and then see the last time it was used on this system."""
     dvs.dvs.set_debug_endpoints("~garfi303adm/html/")
     warnings.filterwarnings("ignore",module="urllib3.connectionpool")
-    message = f"This is message {int(time.time())}"
-    dvs.dvs.do_register([DVS_DEMO_PATH],message=message)
+    note = f"This is note {int(time.time())}"
+    dvs.dvs.do_register([DVS_DEMO_PATH],note=note)
     yield DVS_DEMO_PATH
 
 def test_do_search(do_register):
@@ -57,7 +57,7 @@ def test_do_search(do_register):
 
     searches = dvs.dvs.do_search([do_register], debug=True)
     for search in searches:
-        for result in search[RESULT]:
+        for result in search[RESULTS]:
             if (result.get(FILENAME,None) == os.path.basename(do_register)  and
                 result.get(HEXHASH,None)  == hexhash):
                 logging.info("Found %s", do_register)

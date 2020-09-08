@@ -46,7 +46,7 @@ def test_do_note(dbwriter_auth):
     warnings.filterwarnings("ignore", module="pymysql.cursors")
     update = dvs.helpers.get_file_update(DVS_DEMO_PATH)
     note = f"This is note {int(time.time())}"
-    dvs.dvs_server.add_note(dbwriter_auth, update[HEXHASH], os.environ['USER'], note)
+    dvs.dvs_server.add_note(dbwriter_auth, hexhash=update[HEXHASH], author=os.environ['USER'], note=note)
 
     notes = dvs.dvs_server.get_notes(dbwriter_auth, update[HEXHASH])
     for n in notes:

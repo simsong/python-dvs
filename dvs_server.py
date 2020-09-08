@@ -26,49 +26,66 @@ import webmaint
 
 from dvs_constants import *
 
+def ishexhash(val):
+    if isinstance(val,str):
+        hexset = set('0123456789abcdefABCDEF')
+        return all([ch in hexset for ch in val])
+    return False
+
 def do_search(auth, *, search, debug=False):
     """Implements the low-level search. This will change when we move to GraphQL.
     Currently the search is a dictionary that is matched against. The special wildcard SEARCH_ANY
     is matched against all possible fields. the response is a list of dictionaries of all matches.
     """
-    cmd = "SELECT * from dvs_updates WHERE "
+    cmd = """SELECT a.created as created,a.metadata as metadata, a.metadata_mtime as metadata_mtime,
+                    b.filename as filename,
+                    c.dirname  as dirname,
+                    d.hexhash as hexhash
+    FROM dvs_updates a 
+    LEFT JOIN dvs_filenames b on a.filenameid = b.filenameid 
+    LEFT JOIN dvs_dirnames c on a.dirnameid = c.dirnameid
+    LEFT JOIN dvs_hashes d on a.hashid = d.hashid
+    WHERE """
     search_any = search.get(SEARCH_ANY,None)
+    search_any_fn  = search_any if (isinstance(search_any,str) and ('/' not in search_any)) else None
+    search_any_hex = search_any.lower() if ishexhash(search_any) else None
     wheres = []
     vals   = []
-    if ('filename' in search) or (search_any):
-        if ('filename' in search) and (search_any is None):
-            wheres.append('filenameid in (select filenameid from dvs_filenames where filename=%s ) ')
+    if ('filename' in search) or (search_any_fn):
+        if ('filename' in search) and (search_any_fn is None):
+            wheres.append('a.filenameid in (select filenameid from dvs_filenames where filename=%s ) ')
             vals.append(search['filename'])
-        elif ('filename' in search) and (search_any is not None):
-            wheres.append('filenameid in (select filenameid from dvs_filenames where filename=%s or filename=%s) ')
+        elif ('filename' in search) and (search_any_fn is not None):
+            wheres.append('a.filenameid in (select filenameid from dvs_filenames where filename=%s or filename=%s) ')
             vals.append(search['filename'])
-            vals.append(search_any)
-        elif ('filename' not in search) and (search_any is not None):
-            wheres.append('filenameid in (select filenameid from dvs_filenames where filename=%s) ')
-            vals.append(search_any)
+            vals.append(search_any_fn)
+        elif ('filename' not in search) and (search_any_fn is not None):
+            wheres.append('a.filenameid in (select filenameid from dvs_filenames where filename=%s) ')
+            vals.append(search_any_fn)
         else:
             raise RuntimeError("Logic Error")
             
 
-    if (HEXHASH in search) or (search_any):
-        if (HEXHASH in search) and (search_any is None):
-            wheres.append('hashid in (select hashid from dvs_hashes where hexhash=%s)')
+    if (HEXHASH in search) or (search_any_hex):
+        if (HEXHASH in search) and (search_any_hex is None):
+            wheres.append('a.hashid in (select hashid from dvs_hashes where hexhash=%s)')
             vals.append(search['sha1'])
-        elif (HEXHASH in search) and (search_any is not None):
-            wheres.append('hashid in (select hashid from dvs_hashes where hexhash=%s or hexhash like %s)')
+        elif (HEXHASH in search) and (search_any_hex is not None):
+            wheres.append('a.hashid in (select hashid from dvs_hashes where hexhash=%s or hexhash like %s)')
             vals.append(search['sha1'])
-            vals.append( search_any + "%")
-        elif (HEXHASH not in search) and (search_any is not None):
-            wheres.append('hashid in (select hashid from dvs_hashes where hexhash like %s)')
-            vals.append( search_any + "%")
+            vals.append( search_any_hex + "%")
+        elif (HEXHASH not in search) and (search_any_hex is not None):
+            wheres.append('a.hashid in (select hashid from dvs_hashes where hexhash like %s)')
+            vals.append( search_any_hex + "%")
         else:
             raise RuntimeError("Logic Error 2")
 
     
-    if wheres:
-        cmd = cmd + " OR ".join(wheres) 
-        return dbfile.DBMySQL.csfr(auth, cmd, vals, asDicts=True, debug=debug)
-    return []
+    if not wheres:
+        return []
+    cmd = cmd + " OR ".join(wheres) 
+    return dbfile.DBMySQL.csfr(auth, cmd, vals, asDicts=True, debug=debug)
+
 
 def get_hashid(auth, hexhash, etag):
     dbfile.DBMySQL.csfr(auth,"INSERT IGNORE into dvs_hashes (hexhash,etag) values (%s,%s) ON DUPLICATE KEY UPDATE etag=etag",
@@ -82,6 +99,20 @@ def get_hashid(auth, hexhash, etag):
             warnings.warn("Changing hashid %d etag from %s to %s",hashid,str(etag_),str(etag))
             dbfile.DBMySQL.csfr(auth,"UPDATE dvs_hashes set etag=%s where hashid=%s",(etag,hashid))
     return hashid
+
+
+    
+def add_note(auth,*,hashid=None,hexhash=None,author,note):
+    """This interface is used by the test logic. It is not used in production currently"""
+    if not hashid:
+        hashid = get_hashid(auth,hexhash,None)
+    dbfile.DBMySQL.csfr(auth,"INSERT INTO dvs_notes (hashid,author,note) values (%s,%s,%s)",
+                        (hashid, author, note))
+
+def get_notes(auth,hexhash):
+    """Right now this gets all the notes. It should probably get a set of them"""
+    return dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_notes where hashid=%s",
+                               (get_hashid(auth,hexhash,None)),asDicts=True)
 
 
 def do_update(auth, update):
@@ -147,16 +178,35 @@ def do_update(auth, update):
         dbfile.DBMySQL.csfr(auth,"UPDATE dvs_updates set metadata=%s,modified=now() where updateid=%s",
                             (str(json.dumps(newmd,default=str)),res[0]['updateid']))
 
+    # If any note was provided for the hash, add it to the dvs_notes table
+    if NOTE in update:
+        add_note(auth,hashid=hashid,author=update.get(AUTHOR,None),note=update[NOTE])
              
 
-def add_note(auth,hexhash,author,note):
-    dbfile.DBMySQL.csfr(auth,"INSERT INTO dvs_notes (hashid,author,note) values (%s,%s,%s)",
-                        (get_hashid(auth,hexhash,None), author, note))
+def add_notes(auth,responses,debug=False):
+    """Take an array of results and find all of the hexhashes. Do a single SQL query to get all of the notes for all of the hashes.
+    Then add notes notes to each result."""
+    hex_hashes = set()
+    for response in responses:
+        results = response[RESULTS]
+        for result in results:
+            hex_hashes.add(result[HEXHASH])
+    
 
-def get_notes(auth,hexhash):
-    """Right now this gets all the notes. It should probably get a set of them"""
-    return dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_notes where hashid=%s",
-                               (get_hashid(auth,hexhash,None)),asDicts=True)
+    rows = dbfile.DBMySQL.csfr(auth,
+                               """SELECT a.created as created,a.modified as modified,a.author as author, a.note as note, 
+                                       b.hexhash as hexhash, b.etag as etag
+                               FROM dvs_notes a
+                               LEFT JOIN dvs_hashes b on a.hashid = b.hashid
+                               WHERE b.hexhash in (""" + ",".join(["%s"]*len(hex_hashes)) + ")",
+                               list(hex_hashes),
+                               asDicts=True,
+                               debug=debug)
+    # This is order n^2. It could be rewritten to be order n. Sorry.
+    for response in responses:
+        for result in response[RESULTS]:
+            result[NOTES] = [row for row in rows if row[HEXHASH]==result[HEXHASH]]
+    return
 
 def search_api(auth):
     """Bottle interface for search. Keep everything that has to do with bottle here so that we can implement unit tests.
@@ -176,10 +226,12 @@ def search_api(auth):
     if any([isinstance(obj,dict) is False for obj in searches]):
         response.status = 404
         return f"Searches parameter must be a JSON-encoded list of dictionaries"
-    results = [{'search':search,
-                'result':do_search(auth,search=search, debug=bottle.request.params.debug)} for search in searches]
+    responses = [{SEARCH:search,
+                 RESULTS:do_search(auth,search=search, debug=bottle.request.params.debug)} for search in searches]
+
+    add_notes(auth,responses)
     response.content_type = 'text/json'
-    return json.dumps(results,default=str)
+    return json.dumps(responses,default=str)
 
 def fix_update(update):
     if HOSTNAME not in update:
@@ -202,7 +254,7 @@ def update_api(auth):
         response.status = 404
         return f"Update parameter must be a JSON-encoded list of dictionaries"
     results = [{'id':update.get('id',0),
-                'result':do_update(auth, fix_update(update))} for update in updates]
+                RESULT:do_update(auth, fix_update(update))} for update in updates]
     return json.dumps(results,default=str)
 
 
