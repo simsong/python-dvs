@@ -128,6 +128,10 @@ def do_search(paths, debug=False):
 def render_search(obj):
     count = 0
     FMT = "{:20}: {}"
+    print(f"{obj[SEARCH][FILENAME]}:")
+    if len(obj[RESULTS])==0:
+        print("   not on file\n")
+        return
     for result in obj[RESULTS]:
         if count>0:
             print("   ---   ")
@@ -174,6 +178,6 @@ if __name__ == "__main__":
 
     if args.search:
         for search in do_search(args.path):
-            print(render_search(search))
+            render_search(search)
     else:
         do_register(args.path, note=args.note, dataset=args.dataset)
