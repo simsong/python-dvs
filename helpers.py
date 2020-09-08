@@ -21,6 +21,7 @@ def clean_float(v):
     return int(v) if isinstance(v,float) else v
 
 def json_stat(path: str) -> dict:
+    """Performs a stat(2) of a file and returns the results in a dictionary"""
     s_obj = os.stat(path)
     return {k: clean_float(getattr(s_obj, k)) for k in dir(s_obj) if k.startswith('st_')}
 
@@ -31,6 +32,7 @@ def hash_file(fullpath):
     performance for large files It would be really nice to move to a
     parallelized hash. We return both the hexhash and the etag (md5)
     """
+    logging.debug("Start hashing %s",fullpath)
     file_hash = hashlib.sha1()
     etag_hash = hashlib.md5()
     with open(fullpath, 'rb') as f:
@@ -39,6 +41,7 @@ def hash_file(fullpath):
             file_hash.update(fb)
             etag_hash.update(fb)
             fb = f.read(BLOCK_SIZE)
+    logging.debug("End hashing %s. sha1=%s",fullpath,file_hash.hexdigest())
     return {HEXHASH:file_hash.hexdigest(),
             ETAG:etag_hash.hexdigest()}
 

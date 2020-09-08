@@ -1,13 +1,22 @@
+HTTP_OK=200
+
+ID='id'
 SEARCH='search'
 UPDATE='update'
 METADATA='metadata'
+METADATA_MTIME='metadata_mtime'
 DIRNAME='dirname'
 FILENAME='filename'
 HOSTNAME='hostname'
+PATH='path'
 TIME='time'
 HEXHASH='hexhash'
 ETAG='etag'
-ST_MTIME='st_mtime'
+ST_MTIME='st_mtime'             # mtime as time_t 
+ST_MTIME_NS='st_mtime_ns'       # mtime as time_t * 10E9
 ST_ATIME='st_atime'
 ST_CTIME='st_ctime'
 ST_SIZE='st_size'
+SEARCH_ANY='*'
+SEARCH='search'
+RESULT='result'

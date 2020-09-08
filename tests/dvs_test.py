@@ -7,7 +7,7 @@ import logging
 import warnings
 import pytest
 import time
-
+import json
 """
 Test programs for dvs client, both locally and to the sever
 """
@@ -40,8 +40,28 @@ def test_get_file_update():
     assert update[METADATA][ST_SIZE]==118
     
 
-def test_do_register():
+@pytest.fixture
+def do_register():
     """Register one of the test files and then see the last time it was used on this system."""
+    dvs.dvs.set_debug_endpoints("~garfi303adm/html/")
     warnings.filterwarnings("ignore",module="urllib3.connectionpool")
     message = f"This is message {int(time.time())}"
-    dvs.dvs.do_register([DVS_DEMO_PATH],message)
+    dvs.dvs.do_register([DVS_DEMO_PATH],message=message)
+    yield DVS_DEMO_PATH
+
+def test_do_search(do_register):
+    """Search the file that was just registered and see if its hash is present"""
+    print("do_register:",do_register)
+    hexhash = dvs.helpers.hash_file( do_register )[HEXHASH]
+    
+
+    searches = dvs.dvs.do_search([do_register], debug=True)
+    for search in searches:
+        for result in search[RESULT]:
+            if (result.get(FILENAME,None) == os.path.basename(do_register)  and
+                result.get(HEXHASH,None)  == hexhash):
+                logging.info("Found %s", do_register)
+                return 
+    warnings.warn("Searching for %s did not find result in:\n%s" % (do_register,json.dumps(searches,indent=4,default=str)))
+    raise FileNotFoundError()
+
