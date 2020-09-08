@@ -30,7 +30,7 @@ def hash_file(fullpath):
     Right now this is a 100% python
     implementation, but we should exec out to openssl for faster
     performance for large files It would be really nice to move to a
-    parallelized hash. We return both the hexhash and the etag (md5)
+    parallelized hash. 
     """
     logging.debug("Start hashing %s",fullpath)
     file_hash = hashlib.sha1()
@@ -43,7 +43,7 @@ def hash_file(fullpath):
             fb = f.read(BLOCK_SIZE)
     logging.debug("End hashing %s. sha1=%s",fullpath,file_hash.hexdigest())
     return {HEXHASH:file_hash.hexdigest(),
-            ETAG:etag_hash.hexdigest()}
+            'md5':etag_hash.hexdigest()}
 
 def get_file_update(path, prev_mtime=None):
     """Analyze a file and return its metadata. If prev_mtime is set and mtime hasn't changed, don't hash."""

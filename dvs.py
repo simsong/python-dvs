@@ -7,6 +7,8 @@ import datetime
 import requests
 import json
 import sys
+import boto3
+import time
 
 """
 debug with:
@@ -20,6 +22,8 @@ sys.path.append( os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Until this is properly packaged, just put . into the path
 sys.path.append( os.path.dirname(__file__ ))
 
+import ctools
+import ctools.s3
 from ctools import clogging
 
 from dvs_constants import *
@@ -59,36 +63,8 @@ class SingletonCounter():
         sc.instance.count += 1
         return sc.instance.count
 
-        
-def do_register(paths, *, note=None, dataset=None):
-    # Send the list of paths to the server and ask if the mtime for any of them are known
-    # We make a search_dictionary, which is the search object for each of the paths passed in,
-    # indexed by path
-    search_dicts = {ct : { PATH: os.path.abspath(path),
-                       DIRNAME: os.path.dirname(os.path.abspath(path)),
-                       FILENAME: os.path.basename(path),
-                       METADATA: json_stat(path),
-                       ID : ct }
-                for (ct,path) in enumerate(paths)}
-
-    # Now we want to send all of the objects to the server as a list
-    r = requests.post(ENDPOINTS[SEARCH], 
-                      data={'searches':json.dumps(list(search_dicts.values()), default=str)}, 
-                      verify=VERIFY)
-    logging.debug("status=%s text: %s",r.status_code,r.text)
-    responses = {response[SEARCH][ID] : response for response in r.json()}
-    logging.debug("responses:\n%s",json.dumps(responses,indent=4))
-
-    # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
-    updates = []
-    for search in search_dicts.values():
-        if search[ID] in responses:
-            if HEXHASH in responses[search[ID]]:
-                response_mtime = responses[search[ID]].get(METADATA_MTIME,None)
-            else:
-                response_mtime = None
-            updates.append(get_file_update( search[PATH], response_mtime))
-
+def do_register_updates(updates, *, note=None, dataset=None):
+    """Send the updates with a given note and dataset"""
     # Finally, send the updates to the server with the note
     # If there is only a single update, send the note with it. 
     # If there are multiple updates and a note or a dataset, create an update for the dataset, give the dataset
@@ -109,6 +85,72 @@ def do_register(paths, *, note=None, dataset=None):
     logging.debug("response: %s",r)
     if r.status_code!=HTTP_OK:
         raise RuntimeError("Error from server: %s" % r)
+
+
+def do_register_s3_files(paths, *, note=None, dataset=None):
+    #
+    # Get the metadata for each s3 object.
+    # If the backend does not know the hash (ie: it doesn't know the etag),
+    # then we need to download the file and hash it. 
+    #
+    updates = []
+    s3 = boto3.resource('s3')
+    for path in paths:
+        (bucket,key) = ctools.s3.get_bucket_key(path)
+        object_summary = s3.ObjectSummary(bucket, key)
+        updates.append({HOSTNAME:'s3://' + bucket,
+                        DIRNAME :os.path.dirname(key),
+                        FILENAME:os.path.basename(path),
+                        METADATA: {ST_SIZE: object_summary.size,
+                                   ST_MTIME: time.mktime(object_summary.last_modified.timetuple())
+                                   }})
+                        
+    return do_register_updates(updates, note=note, dataset=dataset)
+
+
+def do_register_local_files(paths, *, note=None, dataset=None):
+    # Send the list of paths to the server and ask if the mtime for any of them are known
+    # We make a search_dictionary, which is the search object for each of the paths passed in,
+    # indexed by path
+    search_dicts = {ct : 
+                    { PATH: os.path.abspath(path),
+                      DIRNAME: os.path.dirname(os.path.abspath(path)),
+                      FILENAME: os.path.basename(path),
+                      METADATA: json_stat(path),
+                      ID : ct }
+                for (ct,path) in enumerate(paths)}
+
+    # Now we want to send all of the objects to the server as a list
+    r = requests.post(ENDPOINTS[SEARCH], 
+                      data={'searches':json.dumps(list(search_dicts.values()), default=str)}, 
+                      verify=VERIFY)
+    logging.debug("status=%s text: %s",r.status_code,r.text)
+    responses = {response[SEARCH][ID] : response for response in r.json()}
+    logging.debug("responses:\n%s",json.dumps(responses,indent=4))
+
+    # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
+    updates = []
+    for search in search_dicts.values():
+        if search[ID] in responses:
+            if HEXHASH in responses[search[ID]]:
+                response_mtime = responses[search[ID]].get(METADATA_MTIME,None)
+            else:
+                response_mtime = None
+            updates.append(get_file_update( search[PATH], response_mtime))
+
+    return do_register_updates(updates, note=note, dataset=dataset)
+
+def do_register(paths, *, note=None, dataset=None):
+    # Make sure all files are either local or s3
+    s3count = sum([1 if path.startswith("s3://") else 0 for path in paths])
+    if s3count==0:
+        return do_register_local_files(paths,note=note,dataset=dataset)
+    if s3count==len(paths):
+        return do_register_s3_files(paths,note=note,dataset=dataset)
+    raise RuntimeError("All files to be registered must be local or on s3://")
+
+    
+
 
 def do_search(paths, debug=False):
     """Ask the server to do a broad search"""
@@ -169,7 +211,7 @@ if __name__ == "__main__":
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--search",   "-s", help="Search for information about the path", action='store_true')
     group.add_argument("--register", "-r", help="Register a file or path. Default action", action='store_true')
-    clogging.add_argument(parser)
+    clogging.add_argument(parser,loglevel_default='WARNING')
     args = parser.parse_args()
     clogging.setup(args.loglevel)
 
@@ -180,4 +222,4 @@ if __name__ == "__main__":
         for search in do_search(args.path):
             render_search(search)
     else:
-        do_register(args.path, note=args.note, dataset=args.dataset)
+        do_register(args.path, note=args.message, dataset=args.dataset)
