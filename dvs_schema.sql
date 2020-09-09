@@ -9,7 +9,7 @@ CREATE TABLE `dvs_hashes` (
     unique index  (hexhash)
 ) ENGINE=InnoDB CHARSET=ascii;
 
-create table dvs_hosts (
+create table dvs_hostnames (
   hostid int not null auto_increment,
   hostname varchar(256) not null,
   primary key (hostid),
@@ -70,7 +70,7 @@ create table dvs_updates (
   index (metadata_mtime),
   index (hashid,hostid),
   foreign key (hashid) references dvs_hashes(hashid),
-  foreign key (hostid) references dvs_hosts(hostid),
+  foreign key (hostid) references dvs_hostnames(hostid),
   foreign key (dirnameid) references dvs_dirnames(dirnameid),
   foreign key (filenameid) references dvs_filenames(filenameid)
 ) engine=innodb;

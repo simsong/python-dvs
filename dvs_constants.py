@@ -1,5 +1,8 @@
 HTTP_OK=200
 
+AWS_METADATA_SHA1='uscb-object-sha1' # the hash on the S3 file
+AWS_METADATA_ST_MTIME='uscb-object-st_mtime' # the time on the file
+AWS_METADATA_ST_SIZE='uscb-object-st_size' # the size of the object
 ID='id'
 SEARCH='search'
 UPDATE='update'

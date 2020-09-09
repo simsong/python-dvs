@@ -39,13 +39,15 @@ def do_search(auth, *, search, debug=False):
     is matched against all possible fields. the response is a list of dictionaries of all matches.
     """
     cmd = """SELECT a.created as created,a.metadata as metadata, a.metadata_mtime as metadata_mtime,
-                    b.filename as filename,
-                    c.dirname  as dirname,
-                    d.hexhash as hexhash
+                    b.hostname as hostname,
+                    c.filename as filename,
+                    d.dirname  as dirname,
+                    e.hexhash as hexhash
     FROM dvs_updates a 
-    LEFT JOIN dvs_filenames b on a.filenameid = b.filenameid 
-    LEFT JOIN dvs_dirnames c on a.dirnameid = c.dirnameid
-    LEFT JOIN dvs_hashes d on a.hashid = d.hashid
+    NATURAL JOIN dvs_hostnames b
+    NATURAL JOIN dvs_filenames c 
+    NATURAL JOIN dvs_dirnames d 
+    NATURAL JOIN dvs_hashes e 
     WHERE """
     search_any = search.get(SEARCH_ANY,None)
     search_any_fn  = search_any if (isinstance(search_any,str) and ('/' not in search_any)) else None
@@ -124,9 +126,9 @@ def do_update(auth, update):
                 'reason':'hexhash not in update dictionary'}
     assert HOSTNAME in update
     assert TIME in update
-    dbfile.DBMySQL.csfr(auth,"INSERT IGNORE into dvs_hosts  (hostname) values (%s) ON DUPLICATE KEY UPDATE hostname=hostname",(update[HOSTNAME],))
+    dbfile.DBMySQL.csfr(auth,"INSERT IGNORE into dvs_hostnames  (hostname) values (%s) ON DUPLICATE KEY UPDATE hostname=hostname",(update[HOSTNAME],))
 
-    hostid = dbfile.DBMySQL.csfr(auth,"SELECT hostid from dvs_hosts where hostname=%s",
+    hostid = dbfile.DBMySQL.csfr(auth,"SELECT hostid from dvs_hostnames where hostname=%s",
                                  (update[HOSTNAME],))[0][0]
 
     hashid = get_hashid(auth, update[HEXHASH], update.get(ETAG,None))

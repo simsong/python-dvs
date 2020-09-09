@@ -25,6 +25,19 @@ def json_stat(path: str) -> dict:
     s_obj = os.stat(path)
     return {k: clean_float(getattr(s_obj, k)) for k in dir(s_obj) if k.startswith('st_')}
 
+def hash_filehandle(f):
+    sha1_hash = hashlib.sha1()
+    md5_hash = hashlib.md5()
+    fb = f.read(BLOCK_SIZE)
+    while len(fb) > 0:
+        sha1_hash.update(fb)
+        md5_hash.update(fb)
+        fb = f.read(BLOCK_SIZE)
+    logging.debug("End hashing %s. sha1=%s",f,sha1_hash.hexdigest())
+    return {HEXHASH:sha1_hash.hexdigest(),
+            'md5':md5_hash.hexdigest()}
+    
+
 def hash_file(fullpath):
     """Hash a file and return its sha1.
     Right now this is a 100% python
@@ -33,17 +46,8 @@ def hash_file(fullpath):
     parallelized hash. 
     """
     logging.debug("Start hashing %s",fullpath)
-    file_hash = hashlib.sha1()
-    etag_hash = hashlib.md5()
     with open(fullpath, 'rb') as f:
-        fb = f.read(BLOCK_SIZE)
-        while len(fb) > 0:
-            file_hash.update(fb)
-            etag_hash.update(fb)
-            fb = f.read(BLOCK_SIZE)
-    logging.debug("End hashing %s. sha1=%s",fullpath,file_hash.hexdigest())
-    return {HEXHASH:file_hash.hexdigest(),
-            'md5':etag_hash.hexdigest()}
+        return hash_filehandle(f)
 
 def get_file_update(path, prev_mtime=None):
     """Analyze a file and return its metadata. If prev_mtime is set and mtime hasn't changed, don't hash."""
