@@ -43,7 +43,6 @@ def test_get_file_update():
     assert update[HEXHASH]=='666d6346e4bf5534c205d842567e0fbe82866ba3'
     assert update[METADATA][ST_SIZE]==118
     
-
 @pytest.fixture
 def do_register():
     """Register one of the test files and then see the last time it was used on this system."""
@@ -54,8 +53,9 @@ def do_register():
     yield DVS_DEMO_PATH
 
 @pytest.fixture
-def do_s3register():
-    """Copy a file to s3 and register it to see if we can work with legacy S3 files. Then copy a file to s3 with our s3 copy routine"""
+def do_s3register1():
+    """Copy a file to s3 and register it to see if we can work with legacy S3 files. 
+    Then copy a file to s3 with our s3 copy routine"""
     subprocess.call(['aws','s3','cp',DVS_DEMO_PATH,S3LOC1])
     s3note = f"This is an S3 note {int(time.time())}"
     dvs.dvs.do_register([S3LOC1],note=s3note)
@@ -72,6 +72,7 @@ def test_do_search(do_register,do_s3register):
                 result.get(HEXHASH,None)  == hexhash):
                 logging.info("Found %s", do_register)
                 return 
-    warnings.warn("Searching for %s did not find result in:\n%s" % (do_register,json.dumps(searches,indent=4,default=str)))
+    warnings.warn("Searching for %s did not find result in:\n%s" 
+                  % (do_register,json.dumps(searches,indent=4,default=str)))
     raise FileNotFoundError()
 
