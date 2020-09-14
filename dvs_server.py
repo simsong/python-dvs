@@ -196,6 +196,9 @@ def add_notes(auth,responses,debug=False):
             hex_hashes.add(result[HEXHASH])
     
 
+    if len(hex_hashes)==0:
+        return                  # no notes!
+
     rows = dbfile.DBMySQL.csfr(auth,
                                """SELECT a.created as created,a.modified as modified,a.author as author, a.note as note, 
                                        b.hexhash as hexhash, b.etag as etag

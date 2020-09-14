@@ -197,6 +197,8 @@ def do_search(paths, debug=False):
     data = {'searches':json.dumps(search_list, default=str)}
     if debug:
         data['debug'] = 'True'
+        print("ENDPOINT: ",ENDPOINTS[SEARCH],file=sys.stderr)
+        print("DATA: ",json.dumps(data,indent=4),file=sys.stderr)
     r = requests.post(ENDPOINTS[SEARCH], 
                       data=data, 
                       verify=VERIFY)
