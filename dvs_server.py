@@ -272,8 +272,7 @@ def get_objects(auth,hexhashes):
 
 def store_commit(auth,commit):
     """The commit is a list of 1 or more list of hashes"""
-    assert isinstance(objects, dict)
-    dbfile.DBMySQL.csfr()
+    assert isinstance(commit, dict)
     if AFTER not in commit:
         raise ValueError("Commit does not include an AFTER list")
     hashes = []
@@ -288,21 +287,19 @@ def store_commit(auth,commit):
             hashes.extend(commit[check])
     # Make sure that all of the hashes are in the database
     rows = dbfile.DBMySQL.csfr(auth,
-                               "SELECT COUNT(*) from objects where hexhash in (" +
-                               ",".join[["%s"] * len(hashes)] + ")",
+                               "SELECT COUNT(*) FROM dvs_objects where hexhash in " 
+                               + helpers.comma_args(len(hashes),parens=True),
                                hashes)
     assert len(rows)==1
-    if rows[0][1]!=len(hashes):
+    if rows[0][0]!=len(hashes):
         raise ValueError(f"received {len(hashes)} hashes in commit but only {rows[0][1]} are in the local database")
     
                         
     # Add the timestamp
     commit[TIME] = time.time()
 
-    # store it
-    commit_json  = helpers.canonical_json(commit)
-    commit_hash  = helpers.hexhash_string(commit_json)
-    objects      = {commit_hash:commit_json}
+    # store it and return the object
+    objects      = helpers.objects_dict([commit])
     store_objects(auth,objects)
     return objects
 
@@ -354,12 +351,12 @@ def commit_api(auth):
     # Todo: this should be done atomically, with a single SQL transaction.
 
     # Now store the new objects
-    store_objects(auth,ojects)
+    store_objects(auth,objects)
 
     commit[REMOTE_ADDR] = request.remote_addr
 
     # Now store the commit as another object
-    commit_obj = store_commit(commit)
+    commit_obj = store_commit(auth, commit)
     return json.dumps( commit_obj,default=str)
 
 

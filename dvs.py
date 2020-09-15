@@ -32,7 +32,7 @@ from helpers import *
 #urllib3.disable_warnings()
 
 ENDPOINTS = {SEARCH:"https://dasexperimental.ite.ti.census.gov/api/dvs/search",
-             UPDATE:"https://dasexperimental.ite.ti.census.gov/api/dvs/update"}
+             COMMIT:"https://dasexperimental.ite.ti.census.gov/api/dvs/commit"}
 #VERIFY=False
 
 VERIFY=False
@@ -73,18 +73,18 @@ def do_commit_send(commit,afters):
     commit = {}
 
     # Construct the AFTER list, which is the hexhash of the canonical JSON
-    after_objects = {hexhash_string(s):s for s in [canonical_json(after) for after in afters]}
-    commit[AFTER] = [after_objects.keys()]
+    objects = objects_dict(afters)
+    commit[AFTER] = list(objects.keys())
 
     logging.debug("objects to upload: %s",len(afters))
     logging.debug("commit: %s",json.dumps(commit,default=str,indent=4))
-    r = requests.post(ENDPOINTS[UPDATE], 
-                      data={'objects':canonical_json(afters),
+    r = requests.post(ENDPOINTS[COMMIT], 
+                      data={'objects':canonical_json(objects),
                             'commit':canonical_json(commit)},
                       verify=VERIFY)
     logging.debug("response: %s",r)
     if r.status_code!=HTTP_OK:
-        raise RuntimeError("Error from server: %s" % r)
+        raise RuntimeError(f"Error from server: {r.status_code}: {r.text}")
     return r.json()
         
 

@@ -68,7 +68,9 @@ def hexhash_string(s):
     
 def is_hexadecimal(s):
     """Return true if s is hexadecimal string"""
-    if len(s)==0:
+    if isinstance(s,str)==False:
+        return False
+    elif len(s)==0:
         return False
     elif len(s)==1:
         return s in string.hexdigits

@@ -58,7 +58,7 @@ def do_s3commit():
     Then copy a file to s3 with our s3 copy routine"""
     subprocess.call(['aws','s3','cp',DVS_DEMO_PATH,S3LOC1])
     commit = {MESSAGE:f"This is an S3 message {int(time.time())}"}
-    dvs.dvs.do_register(commit,[S3LOC1])
+    dvs.dvs.do_commit(commit,[S3LOC1])
     yield S3LOC1
 
 def test_do_search(do_commit,do_s3commit):
@@ -68,11 +68,11 @@ def test_do_search(do_commit,do_s3commit):
     searches = dvs.dvs.do_search([do_commit], debug=True)
     for search in searches:
         for result in search[RESULTS]:
-            if (result.get(FILENAME,None) == os.path.basename(do_register)  and
+            if (result.get(FILENAME,None) == os.path.basename(do_commit)  and
                 result.get(HEXHASH,None)  == hexhash):
-                logging.info("Found %s", do_register)
+                logging.info("Found %s", do_commit)
                 return 
     warnings.warn("Searching for %s did not find result in:\n%s" 
-                  % (do_register,json.dumps(searches,indent=4,default=str)))
+                  % (do_commit,json.dumps(searches,indent=4,default=str)))
     raise FileNotFoundError()
 

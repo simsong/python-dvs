@@ -76,11 +76,12 @@ def test_store_commit(dbwriter_auth):
         return
     
     update = dvs.helpers.get_file_update(DVS_DEMO_PATH)
-    commit = {AFTER:[update]}
+    objects = dvs.helpers.objects_dict([update])
 
     # make sure the update object is stored
-    dvs.dvs_server.store_objects(dbwriter_auth, [update]) 
+    dvs.dvs_server.store_objects(dbwriter_auth,objects)
     # Do it
+    commit = {AFTER:list(objects.keys())}
     dvs.dvs_server.store_commit(dbwriter_auth, commit)
 
 
