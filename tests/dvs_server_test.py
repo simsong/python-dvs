@@ -32,7 +32,28 @@ def dbwriter_auth():
         yield None
     yield webmaint.get_auth_dbwriter()
 
+def test_store_objects(dbwriter_auth):
+    """Make three objects, store them, and see if we can get them back."""
+    warnings.filterwarnings("ignore", module="pymysql.cursors")
+    warnings.filterwarnings("ignore", module="bottle")
+    obj1 = {MESSAGE:time.asctime()}
+    obj2 = {MESSAGE:time.asctime()+"test"}
+    url3 = "https://www.census.gov/"
+    objects = dvs.helpers.objects_dict([obj1,obj2,url3])
+    dvs.dvs_server.store_objects(dbwriter_auth, objects)
+
+    # Now verify that they were stored
+    retr = dvs.dvs_server.get_objects(dbwriter_auth,list(objects.keys()))
+    vals = list(retr.values())
+    
+    assert len(vals)==3
+    assert obj1 in vals
+    assert obj2 in vals
+    assert url3 in vals
+
+    
 def test_do_file_update(dbwriter_auth):
+    """Store a file update for a single file in the database"""
     warnings.filterwarnings("ignore", module="pymysql.cursors")
     warnings.filterwarnings("ignore", module="bottle")
     if dbwriter_auth is None:
@@ -40,7 +61,28 @@ def test_do_file_update(dbwriter_auth):
         return
     
     update = dvs.helpers.get_file_update(DVS_DEMO_PATH)
+    # make sure the update object is stored
+    dvs.dvs_server.store_objects(dbwriter_auth, dvs.helpers.objects_dict([update])) 
+    # Do it
     dvs.dvs_server.do_update(dbwriter_auth, update)
+
+
+def test_store_commit(dbwriter_auth):
+    """Store a file update for a single file in the database"""
+    warnings.filterwarnings("ignore", module="pymysql.cursors")
+    warnings.filterwarnings("ignore", module="bottle")
+    if dbwriter_auth is None:
+        warnings.warn("Cannot run without webmaint")
+        return
+    
+    update = dvs.helpers.get_file_update(DVS_DEMO_PATH)
+    commit = {AFTER:[update]}
+
+    # make sure the update object is stored
+    dvs.dvs_server.store_objects(dbwriter_auth, [update]) 
+    # Do it
+    dvs.dvs_server.store_commit(dbwriter_auth, commit)
+
 
 def test_do_note(dbwriter_auth):
     warnings.filterwarnings("ignore", module="pymysql.cursors")

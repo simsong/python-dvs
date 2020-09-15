@@ -63,31 +63,32 @@ class SingletonCounter():
         sc.instance.count += 1
         return sc.instance.count
 
-def do_register_updates(updates, *, note=None, dataset=None):
-    """Send the updates with a given note and dataset"""
-    # Finally, send the updates to the server with the note
+def do_commit_send(commit,afters):
+    """Send the afters with a given note and dataset"""
+    # Finally, send the afters to the server with the note
     # If there is only a single update, send the note with it. 
-    # If there are multiple updates and a note or a dataset, create an update for the dataset, give the dataset
+    # If there are multiple afters and a note or a dataset, create an update for the dataset, give the dataset
     # that note, and send it as well
-    if len(updates)!=1:
-        raise RuntimeError("Currently we handle just a single dataset")
-    
-    if note:
-        updates[0][NOTE] = note
-        updates[0][AUTHOR] = os.getenv('USER')
-    if dataset:
-        updates[0][DATASET] = dataset
 
-    logging.debug("updates:\n %s",json.dumps(updates,indent=4))
+    commit = {}
+
+    # Construct the AFTER list, which is the hexhash of the canonical JSON
+    after_objects = {hexhash_string(s):s for s in [canonical_json(after) for after in afters]}
+    commit[AFTER] = [after_objects.keys()]
+
+    logging.debug("objects to upload: %s",len(afters))
+    logging.debug("commit: %s",json.dumps(commit,default=str,indent=4))
     r = requests.post(ENDPOINTS[UPDATE], 
-                      data={'updates':json.dumps(updates, default=str)},
+                      data={'objects':canonical_json(afters),
+                            'commit':canonical_json(commit)},
                       verify=VERIFY)
     logging.debug("response: %s",r)
     if r.status_code!=HTTP_OK:
         raise RuntimeError("Error from server: %s" % r)
+    return r.json()
+        
 
-
-def do_register_s3_files(paths, *, note=None, dataset=None):
+def do_commit_s3_files(commit, paths):
     #
     # Get the metadata for each s3 object.
     # If the backend does not know the hash (ie: it doesn't know the etag),
@@ -98,7 +99,7 @@ def do_register_s3_files(paths, *, note=None, dataset=None):
     # but we would have the same versioning issue. I guess we just need to trust users
     # to be careful about updating the objects in place. 
     #
-    updates = []
+    afters = []
     s3_objects = {}
     s3 = boto3.resource('s3')
     for path in paths:
@@ -131,7 +132,7 @@ def do_register_s3_files(paths, *, note=None, dataset=None):
             s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guarenteed
         
 
-        updates.append({HOSTNAME:'s3://' + bucket,
+        afters.append({HOSTNAME:'s3://' + bucket,
                         DIRNAME :os.path.dirname(key),
                         FILENAME:os.path.basename(path),
                         HEXHASH: metadata_hexhash,
@@ -142,14 +143,18 @@ def do_register_s3_files(paths, *, note=None, dataset=None):
     # Can we use https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
     # the StreamingBody() and do multiple gets in the background?
     # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
+    return do_commit_send(commit,afters)
 
-    return do_register_updates(updates, note=note, dataset=dataset)
 
-
-def do_register_local_files(paths, *, note=None, dataset=None):
-    # Send the list of paths to the server and ask if the mtime for any of them are known
-    # We make a search_dictionary, which is the search object for each of the paths passed in,
-    # indexed by path
+def do_commit_local_files(commit, paths):
+    """Find local files, optionally hash them, and send them to the server.
+    1. Send the list of paths to the server and ask if the mtime for any of them are known
+       We make a search_dictionary, which is the search object for each of the paths passed in,
+       indexed by path
+    2. Hash the files that are not known to the server.
+    3. Send to the server a list of all of the files as a commit.
+    TODO: plug-in additional hash attributes.
+    """
     search_dicts = {ct : 
                     { PATH: os.path.abspath(path),
                       DIRNAME: os.path.dirname(os.path.abspath(path)),
@@ -162,30 +167,40 @@ def do_register_local_files(paths, *, note=None, dataset=None):
     r = requests.post(ENDPOINTS[SEARCH], 
                       data={'searches':json.dumps(list(search_dicts.values()), default=str)}, 
                       verify=VERIFY)
-    logging.debug("status=%s text: %s",r.status_code,r.text)
-    responses = {response[SEARCH][ID] : response for response in r.json()}
-    logging.debug("responses:\n%s",json.dumps(responses,indent=4))
+    if r.status_code!=HTTP_OK:
+        raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+        
+    try:
+        responses = {response[SEARCH][ID] : response for response in r.json()}
+    except json.decoder.JSONDecodeError as e:
+        print("Invalid response from server for search request: ",r,file=sys.stderr)
+        raise RuntimeError
+        
 
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
-    updates = []
+    afters = []
     for search in search_dicts.values():
         if search[ID] in responses:
             if HEXHASH in responses[search[ID]]:
                 response_mtime = responses[search[ID]].get(METADATA_MTIME,None)
             else:
                 response_mtime = None
-            updates.append(get_file_update( search[PATH], response_mtime))
+            afters.append(get_file_update( search[PATH], response_mtime))
 
-    return do_register_updates(updates, note=note, dataset=dataset)
+    return do_commit_send(commit,afters)
 
-def do_register(paths, *, note=None, dataset=None):
+def do_commit(commit, paths):
+    """Given a commit and a set of paths, figure out if they are local files or s3 files, add each, and process.
+    TODO: Make this work with both S3 and local files?
+    """
     # Make sure all files are either local or s3
     s3count = sum([1 if path.startswith("s3://") else 0 for path in paths])
     if s3count==0:
-        return do_register_local_files(paths,note=note,dataset=dataset)
-    if s3count==len(paths):
-        return do_register_s3_files(paths,note=note,dataset=dataset)
-    raise RuntimeError("All files to be registered must be local or on s3://")
+        return do_commit_local_files(commit,paths)
+    elif s3count==len(paths):
+        return do_commit_s3_files(commit,paths)
+    else:
+        raise RuntimeError("All files to be registered must be local or on s3://")
 
     
 
@@ -244,22 +259,33 @@ if __name__ == "__main__":
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("path", nargs='*', help="One or more files or directories to process")
-    parser.add_argument("-m", "--message", help="Note when registering the presence of a file")
+    parser.add_argument("-m", "--message", help="Message when registering the presence of a file")
     parser.add_argument("--dataset", help="Specifies the name of a dataset when registering a file")
     parser.add_argument("--debug", action='store_true')
     parser.add_argument("--garfi303", action='store_true')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--search",   "-s", help="Search for information about the path", action='store_true')
-    group.add_argument("--register", "-r", help="Register a file or path. Default action", action='store_true')
+    group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
+    group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
     clogging.add_argument(parser,loglevel_default='WARNING')
     args = parser.parse_args()
+    if args.debug:
+        args.loglevel='DEBUG'
     clogging.setup(args.loglevel)
 
     if args.garfi303:
-        set_debug_endpoints("~garfi303adm/html/")
+        set_debug_endpoints("~garfi303adm/html")
 
     if args.search:
-        for search in do_search(args.path,debug=args.debug):
+        for search in do_search(args.path, debug=args.debug):
             render_search(search)
-    else:
-        do_register(args.path, note=args.message, dataset=args.dataset)
+    elif args.register or args.commit:
+        commit = {}
+        if args.message:
+            commit[MESSAGE]= args.message
+            commit[AUTHOR] = os.getenv('USER')
+        if args.dataset:
+            commit[DATASET] = dataset
+
+        obj = do_commit(commit, args.path)
+        print(json.dumps(obj,indent=4,default=str))

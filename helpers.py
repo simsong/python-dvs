@@ -11,11 +11,22 @@ import json
 import hashlib
 import socket
 import time
+import string
 
 from ctools import clogging
 from dvs_constants import *
 
 BLOCK_SIZE=1024*1024
+
+def comma_args(count,rows=1,parens=False):
+    v = ",".join(["%s"]*count)
+    if rows!=1 and not parens:
+        raise ValueError("parens must be True if rows>1")
+    if parens:
+        v = f"({v})"
+        return ",".join([v] * rows)
+    return v
+
 
 def clean_float(v):
     return int(v) if isinstance(v,float) else v
@@ -49,6 +60,29 @@ def hash_file(fullpath):
     with open(fullpath, 'rb') as f:
         return hash_filehandle(f)
 
+def hexhash_string(s):
+    """Just return the hexadecimal SHA1 of a string"""
+    sha1_hash = hashlib.sha1()
+    sha1_hash.update(s.encode('utf-8'))
+    return sha1_hash.hexdigest()
+    
+def is_hexadecimal(s):
+    """Return true if s is hexadecimal string"""
+    if len(s)==0:
+        return False
+    elif len(s)==1:
+        return s in string.hexdigits
+    else:
+        return all([is_hexadecimal(ch) for ch in s])
+
+def canonical_json(obj):
+    """Turns obj into a string in the canonical json format"""
+    return json.dumps(obj,sort_keys=True,default=str)
+
+def canonical_json_hexhash(obj):
+    """Turns obj into a string in the canonical json format"""
+    return hexhash_string(json.dumps(obj,sort_keys=True,default=str))
+
 def get_file_update(path, prev_mtime=None):
     """Analyze a file and return its metadata. If prev_mtime is set and mtime hasn't changed, don't hash."""
     fullpath = os.path.abspath(path)
@@ -64,3 +98,6 @@ def get_file_update(path, prev_mtime=None):
         update = {**update, **hash_file(fullpath)}
     return update
 
+def objects_dict(objects):
+    """Given a list of objects, return a dictionary where the key for each object is is canonical_json_hexhash"""
+    return {canonical_json_hexhash(obj):obj for obj in objects}

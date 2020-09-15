@@ -1,0 +1,8 @@
+# This is a second simple DVS database
+# It will be seen in a lot of places
+ID,Favorite Color,Town
+1,Red,Andover
+2,Blue,Charlestown
+3,Green,Greenwich
+4,Purple,White Plains
+

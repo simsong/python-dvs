@@ -44,28 +44,28 @@ def test_get_file_update():
     assert update[METADATA][ST_SIZE]==118
     
 @pytest.fixture
-def do_register():
-    """Register one of the test files and then see the last time it was used on this system."""
+def do_commit():
+    """Register one of the test files."""
     dvs.dvs.set_debug_endpoints("~garfi303adm/html/")
     warnings.filterwarnings("ignore",module="urllib3.connectionpool")
-    note = f"This is note {int(time.time())}"
-    dvs.dvs.do_register([DVS_DEMO_PATH],note=note)
+    commit = {MESSAGE:f"This is message {int(time.time())}"}
+    dvs.dvs.do_commit(commit,[DVS_DEMO_PATH])
     yield DVS_DEMO_PATH
 
 @pytest.fixture
-def do_s3register1():
+def do_s3commit():
     """Copy a file to s3 and register it to see if we can work with legacy S3 files. 
     Then copy a file to s3 with our s3 copy routine"""
     subprocess.call(['aws','s3','cp',DVS_DEMO_PATH,S3LOC1])
-    s3note = f"This is an S3 note {int(time.time())}"
-    dvs.dvs.do_register([S3LOC1],note=s3note)
+    commit = {MESSAGE:f"This is an S3 message {int(time.time())}"}
+    dvs.dvs.do_register(commit,[S3LOC1])
     yield S3LOC1
 
-def test_do_search(do_register,do_s3register):
+def test_do_search(do_commit,do_s3commit):
     """Search the file that was just registered and see if its hash is present"""
-    hexhash = dvs.helpers.hash_file( do_register )[HEXHASH]
+    hexhash = dvs.helpers.hash_file( do_commit )[HEXHASH]
     
-    searches = dvs.dvs.do_search([do_register], debug=True)
+    searches = dvs.dvs.do_search([do_commit], debug=True)
     for search in searches:
         for result in search[RESULTS]:
             if (result.get(FILENAME,None) == os.path.basename(do_register)  and

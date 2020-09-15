@@ -26,12 +26,7 @@ from ctools import tydoc
 import webmaint
 
 from dvs_constants import *
-
-def ishexhash(val):
-    if isinstance(val,str):
-        hexset = set('0123456789abcdefABCDEF')
-        return all([ch in hexset for ch in val])
-    return False
+import helpers
 
 def do_search(auth, *, search, debug=False):
     """Implements the low-level search. This will change when we move to GraphQL.
@@ -51,7 +46,7 @@ def do_search(auth, *, search, debug=False):
     WHERE """
     search_any = search.get(SEARCH_ANY,None)
     search_any_fn  = search_any if (isinstance(search_any,str) and ('/' not in search_any)) else None
-    search_any_hex = search_any.lower() if ishexhash(search_any) else None
+    search_any_hex = search_any.lower() if helpers.is_hexadecimal(search_any) else None
     wheres = []
     vals   = []
     if ('filename' in search) or (search_any_fn):
@@ -104,7 +99,6 @@ def get_hashid(auth, hexhash, etag):
     return hashid
 
 
-    
 def add_note(auth,*,hashid=None,hexhash=None,author,note):
     """This interface is used by the test logic. It is not used in production currently"""
     if not hashid:
@@ -112,11 +106,11 @@ def add_note(auth,*,hashid=None,hexhash=None,author,note):
     dbfile.DBMySQL.csfr(auth,"INSERT INTO dvs_notes (hashid,author,note) values (%s,%s,%s)",
                         (hashid, author, note))
 
+
 def get_notes(auth,hexhash):
     """Right now this gets all the notes. It should probably get a set of them"""
     return dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_notes where hashid=%s",
                                (get_hashid(auth,hexhash,None)),asDicts=True)
-
 
 def do_update(auth, update):
     """
@@ -204,7 +198,7 @@ def add_notes(auth,responses,debug=False):
                                        b.hexhash as hexhash, b.etag as etag
                                FROM dvs_notes a
                                LEFT JOIN dvs_hashes b on a.hashid = b.hashid
-                               WHERE b.hexhash in (""" + ",".join(["%s"]*len(hex_hashes)) + ")",
+                               WHERE b.hexhash in """ + helpers.comma_args(len(hex_hashes),parens=True) ,
                                list(hex_hashes),
                                asDicts=True,
                                debug=debug)
@@ -233,7 +227,8 @@ def search_api(auth):
         response.status = 404
         return f"Searches parameter must be a JSON-encoded list of dictionaries"
     responses = [{SEARCH:search,
-                 RESULTS:do_search(auth,search=search, debug=bottle.request.params.debug)} for search in searches]
+                 RESULTS:do_search(auth,search=search, debug=bottle.request.params.debug)} 
+                 for search in searches]
 
     add_notes(auth,responses)
     response.content_type = 'text/json'
@@ -246,22 +241,126 @@ def fix_update(update):
         update[TIME] = int(time.time())
     return update
 
-def update_api(auth):
-    """Bottle interface for updates."""
+def store_objects(auth,objects):
+    """Objects is a dictionary of key:values that will be stored. The value might be a URL or a dictionary"""
+    assert isinstance(objects,dict)
+    vals = []
+    for (key,val) in objects.items():
+        if isinstance(val,dict):
+            # we were given an object to store
+            val_json = helpers.canonical_json( val )
+            assert key == helpers.hexhash_string( val_json )
+            vals.append(key)
+            vals.append(val_json)
+            vals.append(None)
+        elif isinstance(val,str):
+            # we were given a URL to store
+            vals.append(key)
+            vals.append(None)
+            vals.append(val)
+    dbfile.DBMySQL.csfr(auth,"INSERT IGNORE INTO dvs_objects (hexhash,object,url) VALUES " 
+                        + helpers.comma_args(3,rows=len(objects),parens=True), vals)
+
+def get_objects(auth,hexhashes):
+    """Returns the objects for the hexhashes. If the hexhash is a url, returns a proxy (which is a string, rather than an object)"""
+    rows = dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_objects where hexhash in" + helpers.comma_args(len(hexhashes),parens=True),
+                        hexhashes,
+                        asDicts=True)
+
+    return {row['hexhash']:(json.loads(row['object']) if row['object'] else row['url']) for row in rows}
+    
+
+def store_commit(auth,commit):
+    """The commit is a list of 1 or more list of hashes"""
+    assert isinstance(objects, dict)
+    dbfile.DBMySQL.csfr()
+    if AFTER not in commit:
+        raise ValueError("Commit does not include an AFTER list")
+    hashes = []
+    for check in [BEFORE,METHOD,AFTER]:
+        if check in commit:
+            if not isinstance(commit[check], list):
+                raise ValueError(f"{check} is not a list")
+            if not all([isinstance(elem,str) for elem in commit[check]]):
+                raise ValueError(f"{check} is not a list of strings")
+            if not all([helpers.is_hexadecimal(elem) for elem in commit[check]]):
+                raise ValueError(f"{check} contains a value that is not a hexadecimal hash")
+            hashes.extend(commit[check])
+    # Make sure that all of the hashes are in the database
+    rows = dbfile.DBMySQL.csfr(auth,
+                               "SELECT COUNT(*) from objects where hexhash in (" +
+                               ",".join[["%s"] * len(hashes)] + ")",
+                               hashes)
+    assert len(rows)==1
+    if rows[0][1]!=len(hashes):
+        raise ValueError(f"received {len(hashes)} hashes in commit but only {rows[0][1]} are in the local database")
+    
+                        
+    # Add the timestamp
+    commit[TIME] = time.time()
+
+    # store it
+    commit_json  = helpers.canonical_json(commit)
+    commit_hash  = helpers.hexhash_string(commit_json)
+    objects      = {commit_hash:commit_json}
+    store_objects(auth,objects)
+    return objects
+
+def commit_api(auth):
+    """Bottle interface for commits."""
+    # Decode and validate the arguments
+    # First validate the objects
     try:
-        updates = json.loads(bottle.request.params.updates)
+        objects = json.loads(bottle.request.params.objects)
     except json.decoder.JSONDecodeError:
-        response.status = 404
-        return "update parameter is not a valid JSON value"
-    if not isinstance(updates,list):
-        response.status = 404
-        return f"Update parameter must be a JSON-encoded list"
-    if any([isinstance(obj,dict) is False for obj in updates]):
-        response.status = 404
-        return f"Update parameter must be a JSON-encoded list of dictionaries"
-    results = [{'id':update.get('id',0),
-                RESULT:do_update(auth, fix_update(update))} for update in updates]
-    return json.dumps(results,default=str)
+        response.status = 400
+        return f"objects parameter is not a valid JSON value"
+    if not isinstance(objects,dict):
+        response.status = 400
+        return f"objects parameter is not a JSON-encoded dictionary"
+    for (key,value) in objects.items():
+        if not helpers.is_hexadecimal(key):
+            response.status = 400
+            return f"object key {key} is not a hexadecimal value"
+        if isinstance(value,dict):
+            cj = helpers.canonical_json(value)
+            hh = helpers.hexhash_string(cj)
+            if key != hh:
+                response.status = 400
+                return f"object key {key} has a computed hash of {hh}"
+        elif instance(value,str):
+            if ":" not in value:
+                response.status = 400
+                return f"object key {key} value is not a URL"
+        else:
+            return f"object key {key} is not a dict or a string"
+
+    
+    # Now validate the commit
+    try:
+        commit = json.loads(bottle.request.params.commit)
+    except json.decoder.JSONDecodeError:
+        response.status = 400
+        return f"commit parameter is not a valid JSON value"
+    if not isinstance(commit,dict):
+        response.status = 400
+        return f"commit parameter is not a JSON-encoded dictionary"
+    for (key,value) in objects.items():
+        if not isinstance(key,str):
+            response.status=400
+            return f"commit key {key} is not a string"
+        
+    # Paramters look good. Store the objects. 
+    # Todo: this should be done atomically, with a single SQL transaction.
+
+    # Now store the new objects
+    store_objects(auth,ojects)
+
+    commit[REMOTE_ADDR] = request.remote_addr
+
+    # Now store the commit as another object
+    commit_obj = store_commit(commit)
+    return json.dumps( commit_obj,default=str)
 
 
 def search_html(auth):
