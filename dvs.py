@@ -46,23 +46,6 @@ def set_debug_endpoints(prefix):
         ENDPOINTS[e] = ENDPOINTS[e].replace("census.gov/api",f"census.gov/{prefix}/api")
 
 
-class SingletonCounter():
-    class __SingletonCounter:
-        def __init__(self):
-            self.count = 0
-        def __str__(self):
-            return repr(self) + str(self.count)
-    instance = None
-    def __init__(self):
-        if not SingletonCounter.instance:
-            SingletonCounter.instance = SingletonCounter.__SingletonCounter()
-    
-    @classmethod
-    def next_id(self):
-        sc = SingletonCounter()
-        sc.instance.count += 1
-        return sc.instance.count
-
 def do_commit_send(commit,afters):
     """Send the afters with a given note and dataset"""
     # Finally, send the afters to the server with the note
