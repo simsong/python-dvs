@@ -46,20 +46,20 @@ def set_debug_endpoints(prefix):
         ENDPOINTS[e] = ENDPOINTS[e].replace("census.gov/api",f"census.gov/{prefix}/api")
 
 
-def do_commit_send(commit,afters):
-    """Send the afters with a given note and dataset"""
-    # Finally, send the afters to the server with the note
+def do_commit_send(commit,file_objs):
+    """Send the file_objs with a given note and dataset"""
+    # Finally, send the file_objs to the server with the note
     # If there is only a single update, send the note with it. 
-    # If there are multiple afters and a note or a dataset, create an update for the dataset, give the dataset
+    # If there are multiple file_objs and a note or a dataset, create an update for the dataset, give the dataset
     # that note, and send it as well
 
     commit = {}
 
-    # Construct the AFTER list, which is the hexhash of the canonical JSON
-    objects = objects_dict(afters)
-    commit[AFTER] = list(objects.keys())
+    # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON
+    objects = objects_dict(file_objs)
+    commit[BEFORE] = list(objects.keys())
 
-    logging.debug("objects to upload: %s",len(afters))
+    logging.debug("objects to upload: %s",len(file_objs))
     logging.debug("commit: %s",json.dumps(commit,default=str,indent=4))
     r = requests.post(ENDPOINTS[COMMIT], 
                       data={'objects':canonical_json(objects),
@@ -82,7 +82,7 @@ def do_commit_s3_files(commit, paths):
     # but we would have the same versioning issue. I guess we just need to trust users
     # to be careful about updating the objects in place. 
     #
-    afters = []
+    file_objs = []
     s3_objects = {}
     s3 = boto3.resource('s3')
     for path in paths:
@@ -115,7 +115,7 @@ def do_commit_s3_files(commit, paths):
             s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guarenteed
         
 
-        afters.append({HOSTNAME:'s3://' + bucket,
+        file_objs.append({HOSTNAME:'s3://' + bucket,
                         DIRNAME :os.path.dirname(key),
                         FILENAME:os.path.basename(path),
                         HEXHASH: metadata_hexhash,
@@ -126,7 +126,7 @@ def do_commit_s3_files(commit, paths):
     # Can we use https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
     # the StreamingBody() and do multiple gets in the background?
     # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
-    return do_commit_send(commit,afters)
+    return do_commit_send(commit,file_objs)
 
 
 def do_commit_local_files(commit, paths):
@@ -161,16 +161,16 @@ def do_commit_local_files(commit, paths):
         
 
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
-    afters = []
+    file_objs = []
     for search in search_dicts.values():
         if search[ID] in responses:
             if HEXHASH in responses[search[ID]]:
                 response_mtime = responses[search[ID]].get(METADATA_MTIME,None)
             else:
                 response_mtime = None
-            afters.append(get_file_update( search[PATH], response_mtime))
+            file_objs.append(get_file_update( search[PATH], response_mtime))
 
-    return do_commit_send(commit,afters)
+    return do_commit_send(commit,file_objs)
 
 def do_commit(commit, paths):
     """Given a commit and a set of paths, figure out if they are local files or s3 files, add each, and process.

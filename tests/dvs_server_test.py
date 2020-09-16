@@ -81,7 +81,7 @@ def test_store_commit(dbwriter_auth):
     # make sure the update object is stored
     dvs.dvs_server.store_objects(dbwriter_auth,objects)
     # Do it
-    commit = {AFTER:list(objects.keys())}
+    commit = {BEFORE:list(objects.keys())}
     dvs.dvs_server.store_commit(dbwriter_auth, commit)
 
 

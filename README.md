@@ -1,8 +1,10 @@
 # dvs
-The Data Vintaging System
+The Data Vintaging System (v2)
 
 
-## Principles
+
+
+## Principles 
 
 hashes refer to:
  - individual files
@@ -14,6 +16,9 @@ JSON objects can be:
  - a transformation on a file (inputs (hashes), program (hashes), outputs (hashes)
  - a set of files.
 
+
+## Design Goals
+- The entire system can be recreated from the object store.
 
 ## Use Cases
 
@@ -27,9 +32,9 @@ The server can store:
 
 Registering a single object (e.g. committing in git):
   - Stores the JSON  the object store.
-  - {"after":[h1,h2,...],"comment":'string',"time":time_t}
+  - e.g.:  `{"before":[h1,h2,...],"comment":'string',"time":time_t}`
   - Returns the hash of the registration.
-  - {"commit":{"after":[h1,h2,...],"comment":'string',"time":time_t}}
+  - e.g.: `{"commit":{"before":[h1,h2,...],"comment":'string',"time":time_t}}`
 
 Search for the hash of the registration:
   - Get back the registration
@@ -54,18 +59,21 @@ Registrering a transformation from one set of files to another set of files thro
      {"commit":{"before":[h1,h2,...], "method":[h1,h2,...}, "after":[h1,h2,...]}}
 
 
-So the fundamental object that we store is:
+So the fundamental object that we store for a commit is:
+```json
  { "before":[hexhashes of befores],
    "method":[hexhashes of transformers],
-   "after":[hexhases of afters],
+   "after": [hexhases of afters],
    "comment":"a string"
 }
+```
+
+Every field is optional, but there must be at least one BEFORE, METHOD or AFTER hash. Object is put into cannonical form, hashed, and stored in the object store.
 
 The fundamental transaction to the server is:
   { "objects":[{"hexhash":<object>,"hexhash":<object>}],
     "commits":[obj,obj,obj]}
 
-Every field is optional. Object is put into cannonical form, hashed, and stored in the object store.
+The server returns the committed objects.
 
-Design goal: The entire system can be recreated from the object store.
-   
+Notes are a commit that has a `before` and a `comment` field.   
