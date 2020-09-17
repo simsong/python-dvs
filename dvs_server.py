@@ -211,13 +211,13 @@ def do_update(auth, update):
                             INSERT INTO dvs_updates (hashid,hostid,dirnameid,filenameid,metadata)
                             VALUES (%s,%s,%s,%s,%s)
                             """,
-                            (hashid,hostid,dirnameid,filenameid,str(json.dumps(update[METADATA],default=str))))
+                            (hashid,hostid,dirnameid,filenameid,str(json.dumps(update[FILE_METADATA],default=str))))
         
     else:
         # Just update the first one (There shoudn't be more than one unless some were present
         # without a filename or directoryname)
         newmd = json.loads(res[0]['metadata'])
-        for (key,val) in update[METADATA].items():
+        for (key,val) in update[FILE_METADATA].items():
             newmd[key] = val
         dbfile.DBMySQL.csfr(auth,"UPDATE dvs_updates set metadata=%s,modified=now() where updateid=%s",
                             (str(json.dumps(newmd,default=str)),res[0]['updateid']))
@@ -317,7 +317,7 @@ def get_objects(auth,hexhashes):
                         hexhashes,
                         asDicts=True)
 
-    return {row['hexhash']:(json.loads(row['object']) if row['object'] else row['url']) for row in rows}
+    return {row[HEXHASH]:(json.loads(row[OBJECT]) if row[OBJECT] else row['url']) for row in rows}
     
 
 def store_commit(auth,commit):

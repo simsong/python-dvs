@@ -72,16 +72,10 @@ def do_commit_send(commit,file_objs):
         
 
 def do_commit_s3_files(commit, paths):
-    #
-    # Get the metadata for each s3 object.
-    # If the backend does not know the hash (ie: it doesn't know the etag),
-    # then we need to download the file and hash it.  It seems that sometimes
-    # an object can be updated without our knowing it. We tried storing the object
-    # modification_time in the object, but when we updated it, the modification time
-    # got updated, so that didn't work. It would be nice if we could store a version number,
-    # but we would have the same versioning issue. I guess we just need to trust users
-    # to be careful about updating the objects in place. 
-    #
+    """Get the metadata for each s3 object.
+    Then do a search and ask the sever if it knows for an object with this etag.
+    If the backend knows about this etag, then we don't need to hash again."""
+
     file_objs = []
     s3_objects = {}
     s3 = boto3.resource('s3')
@@ -89,40 +83,41 @@ def do_commit_s3_files(commit, paths):
         (bucket,key) = ctools.s3.get_bucket_key(path)
         s3_object              = s3.Object(bucket,key)
         try:
-            metadata_hexhash   = s3_object.metadata[AWS_METADATA_SHA1]
+            metadata_hashes    = json.loads(s3_object.metadata[AWS_METADATA_HASHES])
             metadata_st_size   = int(s3_object.metadata[AWS_METADATA_ST_SIZE])
-        except KeyError:
-            metadata_hexhash   = None
+        except (KeyError,json.decoder.JSONDecodeError):
+            metadata_hashes   = None
             metadata_st_size   = None
             
-        if ((metadata_hexhash is None) or (metadata_st_size is None) or (metadata_st_size != s3_object.content_length)):
-            if metadata_hexhash is None:
-                print(f"{path} does not have a SHA1 in object metadata",file=sys.stderr)
+        if ((metadata_hashes is None) or (metadata_st_size is None) or (metadata_st_size != s3_object.content_length)):
+            if metadata_hashes is None:
+                print(f"{path} does not have hashes in object metadata",file=sys.stderr)
             if (metadata_st_size is not None) and int(metadata_st_size) != int(s3_object.content_length):
                 print(f"{path} size ({s3_object.content_length}) does not match what we previously stored in metadata ({metadata_st_size})",file=sys.stderr)
             print("Downloading and hashing s3 object",file=sys.stderr)
             hashes = hash_filehandle(s3_object.get()['Body'])
-            print(f"{path} sha1: {hashes}",file=sys.stderr)
-            metadata_hexhash  = hashes[HEXHASH]
+            print(f"{path} hashes {hashes}",file=sys.stderr)
+            metadata_hashes   = json.dumps(hashes,default=str)
             metadata_st_size  = s3_object.content_length
 
             # Update the object metadata
             # https://stackoverflow.com/questions/39596987/how-to-update-metadata-of-an-existing-object-in-aws-s3-using-python-boto3
-            new_metadata = {AWS_METADATA_SHA1:metadata_hexhash,
+            new_metadata = {AWS_METADATA_HASHES:json.dumps(metadata_hashes,default=str),
                             AWS_METADATA_ST_SIZE: str(metadata_st_size)}
+
             s3_object.metadata.update(new_metadata)
             s3_object.copy_from(CopySource={'Bucket':bucket,'Key':key}, Metadata=s3_object.metadata, MetadataDirective='REPLACE')
             s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guarenteed
         
 
-        file_objs.append({HOSTNAME:'s3://' + bucket,
-                        DIRNAME :os.path.dirname(key),
-                        FILENAME:os.path.basename(path),
-                        HEXHASH: metadata_hexhash,
-                        METADATA: {ST_SIZE: str(s3_object.content_length),
-                                   ST_MTIME: str(int(time.mktime(s3_object.last_modified.timetuple())))
-                                   }})
-                        
+            file_objs.append({HOSTNAME:'s3://' + bucket,
+                              DIRNAME :os.path.dirname(key),
+                              FILENAME:os.path.basename(path),
+                              FILE_HASHES: metadata_hashes,
+                              FILE_METADATA: {ST_SIZE: str(s3_object.content_length),
+                                         ST_MTIME: str(int(time.mktime(s3_object.last_modified.timetuple())))
+                                     }})
+            
     # Can we use https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
     # the StreamingBody() and do multiple gets in the background?
     # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
@@ -138,15 +133,19 @@ def do_commit_local_files(commit, paths):
     3. Send to the server a list of all of the files as a commit.
     TODO: plug-in additional hash attributes.
     """
+    logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
+    hostname = socket.gethostname()
     search_dicts = {ct : 
                     { PATH: os.path.abspath(path),
                       DIRNAME: os.path.dirname(os.path.abspath(path)),
                       FILENAME: os.path.basename(path),
-                      METADATA: json_stat(path),
+                      HOSTNAME: hostname,
+                      FILE_METADATA: json_stat(path),
                       ID : ct }
                 for (ct,path) in enumerate(paths)}
 
     # Now we want to send all of the objects to the server as a list
+    logging.debug("Search send: %s",str(search_dicts))
     r = requests.post(ENDPOINTS[SEARCH], 
                       data={'searches':json.dumps(list(search_dicts.values()), default=str)}, 
                       verify=VERIFY)
@@ -154,22 +153,42 @@ def do_commit_local_files(commit, paths):
         raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
         
     try:
-        responses = {response[SEARCH][ID] : response for response in r.json()}
+        results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in r.json()}
     except json.decoder.JSONDecodeError as e:
         print("Invalid response from server for search request: ",r,file=sys.stderr)
         raise RuntimeError
         
-
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
     file_objs = []
-    for search in search_dicts.values():
-        if search[ID] in responses:
-            if HEXHASH in responses[search[ID]]:
-                response_mtime = responses[search[ID]].get(METADATA_MTIME,None)
+    for (search_id,search) in search_dicts.items():
+        path = search[PATH]
+        dirname = search[DIRNAME]
+        filename = search[FILENAME]
+        file_metadata = search[FILE_METADATA]
+        response_filehash = None
+        try:
+            results = results_by_searchid[search_id]
+        except KeyError:
+            logging.debug("file %s was not found in search",search_id)
+            continue
+        # If any of the objects has a metadata that matches, and it has a hash, use it
+        obj = None
+        for result in results:
+            objr = json.loads(result[OBJECT])
+            if (objr.get(DIRNAME,None)==dirname  and
+                objr.get(FILENAME,None)==filename and
+                objr.get(FILE_METADATA,None)==file_metadata and
+                FILE_HASHES in objr):
+                logging.info("using hash from server for %s ",path)
+                # Take the old values and overwrite with new ones
+                obj = {**objr, **get_file_observation(path)}
+                break
             else:
-                response_mtime = None
-            file_objs.append(get_file_update( search[PATH], response_mtime))
-
+                logging.debug("Not in %s",result)
+        if obj is None:
+            logging.debug("Could not find hash; hashing file")
+            obj = {**get_file_observation(path), **{FILE_HASHES:hash_file(path)}}
+        file_objs.append(obj)
     return do_commit_send(commit,file_objs)
 
 def do_commit(commit, paths):
@@ -230,7 +249,7 @@ def render_search(obj):
         for (k,v) in sorted(result.items()):
             if k==NOTES:
                 continue
-            elif k==METADATA:
+            elif k==FILE_METADATA:
                 for (kk,vv) in json.loads(v).items():
                     if kk==ST_SIZE:
                         print(FMT.format('size',vv))
