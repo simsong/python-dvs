@@ -8,11 +8,9 @@ dvsserver
 import os
 import sys
 import random
-import bottle
 import json
 import warnings
 import time
-from bottle import request,response
 
 # Get 'ctools' into the path
 sys.path.append( os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -28,8 +26,8 @@ import webmaint
 from dvs_constants import *
 import helpers
 
-def do_search(auth, *, search, debug=False):
-    """Implements the low-level search. This will change when we move to GraphQL.
+def do_v1search(auth, *, search, debug=False):
+    """Implements the low-level v2 search. This will change when we move to GraphQL.
     Currently the search is a dictionary that is matched against. The special wildcard SEARCH_ANY
     is matched against all possible fields. the response is a list of dictionaries of all matches.
     """
@@ -83,6 +81,55 @@ def do_search(auth, *, search, debug=False):
         return []
     cmd = cmd + " OR ".join(wheres) 
     return dbfile.DBMySQL.csfr(auth, cmd, vals, asDicts=True, debug=debug)
+
+
+def do_v2search(auth, *, search, debug=False):
+    """Implements the low-level v2 search. This will change when we move to GraphQL.
+    Currently the search is a dictionary that is matched against. The special wildcard SEARCH_ANY
+    is matched against all possible fields. the response is a list of dictionaries of all matches.
+    Right now there is no indexing on the objects. We may wish to create an index for the properties that we care about.
+    Perhaps we should have used MongoDB?
+    """
+    cmd = """SELECT objectid,created,hexhash,object,url from dvs_objects where """
+    wheres = []
+    vals   = []
+    search_any = search.get(SEARCH_ANY,None)
+    search_hashes = []
+    if helpers.is_hexadecimal(search_any):
+        search_hashes.append(search_any)
+    if HEXHASH in search:
+        search_hashes.append(search.get(HEXHASH))
+    
+    search_filenames = []
+    if search_any:
+        search_filenames.append(search_any)
+    if FILENAME in search:
+        search_filenames.append(search.get(FILENAME))
+
+    search_dirnames = []
+    if search_any:
+        search_dirnames.append(search_any)
+    if DIRNAME in search:
+        search_dirnames.append(search.get(FILENAME))
+
+    if search_hashes:
+        wheres.extend([" (hexhash LIKE %s) "] * len(search_hashes))
+        vals.extend(search_hashes)
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hexhash')) LIKE %s) "] * len(search_hashes))
+        vals.extend(search_hashes)
+
+    if search_filenames:
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.filename')) LIKE %s) "] * len(search_filenames))
+        vals.extend(search_filenames)
+
+    if search_dirnames:
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.dirname')) LIKE %s) "] * len(search_dirnames))
+        vals.extend(search_dirnames)
+
+    if len(vals)==0:
+        return []
+
+    return dbfile.DBMySQL.csfr(auth, cmd + " OR ".join(wheres), vals, asDicts=True, debug=debug)
 
 
 def get_hashid(auth, hexhash, etag):
@@ -213,33 +260,36 @@ def search_api(auth):
     The search request is a list of searches. Each search is a dict that is matched.
     The response is a list of dicts. Each dict contains the search array and a list of the search responses.
     """
+    import bottle
     try:
         searches = json.loads(bottle.request.params.searches)
     except json.decoder.JSONDecodeError:
-        response.status = 404
+        bottle.response.status = 404
         if len(bottle.request.params.searches)==0:
             return f"searches parameter was not supplied"
         return f"searches parameter ({bottle.request.params.searches}) is not a valid JSON value"
     if not isinstance(searches,list):
-        response.status = 404
+        bottle.response.status = 404
         return f"Searches parameter must be a JSON-encoded list"
     if any([isinstance(obj,dict) is False for obj in searches]):
-        response.status = 404
+        bottle.response.status = 404
         return f"Searches parameter must be a JSON-encoded list of dictionaries"
     responses = [{SEARCH:search,
-                 RESULTS:do_search(auth,search=search, debug=bottle.request.params.debug)} 
+                 RESULTS:do_v2search(auth,search=search, debug=bottle.request.params.debug)} 
                  for search in searches]
 
     add_notes(auth,responses)
-    response.content_type = 'text/json'
+    bottle.response.content_type = 'text/json'
     return json.dumps(responses,default=str)
 
-def fix_update(update):
-    if HOSTNAME not in update:
-        update[HOSTNAME] = request.remote_addr
-    if TIME not in update:
-        update[TIME] = int(time.time())
-    return update
+
+
+###
+### v2 object-based API
+###
+
+
+
 
 def store_objects(auth,objects):
     """Objects is a dictionary of key:values that will be stored. The value might be a URL or a dictionary"""
@@ -273,8 +323,6 @@ def get_objects(auth,hexhashes):
 def store_commit(auth,commit):
     """The commit is a list of 1 or more list of hashes"""
     assert isinstance(commit, dict)
-    if AFTER not in commit:
-        raise ValueError("Commit does not include an AFTER list")
     hashes = []
     for check in [BEFORE,METHOD,AFTER]:
         if check in commit:
@@ -285,6 +333,8 @@ def store_commit(auth,commit):
             if not all([helpers.is_hexadecimal(elem) for elem in commit[check]]):
                 raise ValueError(f"{check} contains a value that is not a hexadecimal hash")
             hashes.extend(commit[check])
+    if len(hashes)==0:
+        raise ValueError("Commit does not include any hexhashes in the before, method or after sections")
     # Make sure that all of the hashes are in the database
     rows = dbfile.DBMySQL.csfr(auth,
                                "SELECT COUNT(*) FROM dvs_objects where hexhash in " 
@@ -305,29 +355,30 @@ def store_commit(auth,commit):
 
 def commit_api(auth):
     """Bottle interface for commits."""
+    import bottle
     # Decode and validate the arguments
     # First validate the objects
     try:
         objects = json.loads(bottle.request.params.objects)
     except json.decoder.JSONDecodeError:
-        response.status = 400
+        bottle.response.status = 400
         return f"objects parameter is not a valid JSON value"
     if not isinstance(objects,dict):
-        response.status = 400
+        bottle.response.status = 400
         return f"objects parameter is not a JSON-encoded dictionary"
     for (key,value) in objects.items():
         if not helpers.is_hexadecimal(key):
-            response.status = 400
+            bottle.response.status = 400
             return f"object key {key} is not a hexadecimal value"
         if isinstance(value,dict):
             cj = helpers.canonical_json(value)
             hh = helpers.hexhash_string(cj)
             if key != hh:
-                response.status = 400
+                bottle.response.status = 400
                 return f"object key {key} has a computed hash of {hh}"
         elif instance(value,str):
             if ":" not in value:
-                response.status = 400
+                bottle.response.status = 400
                 return f"object key {key} value is not a URL"
         else:
             return f"object key {key} is not a dict or a string"
@@ -337,14 +388,14 @@ def commit_api(auth):
     try:
         commit = json.loads(bottle.request.params.commit)
     except json.decoder.JSONDecodeError:
-        response.status = 400
+        bottle.response.status = 400
         return f"commit parameter is not a valid JSON value"
     if not isinstance(commit,dict):
-        response.status = 400
+        bottle.response.status = 400
         return f"commit parameter is not a JSON-encoded dictionary"
     for (key,value) in objects.items():
         if not isinstance(key,str):
-            response.status=400
+            bottle.response.status=400
             return f"commit key {key} is not a string"
         
     # Paramters look good. Store the objects. 
@@ -353,7 +404,7 @@ def commit_api(auth):
     # Now store the new objects
     store_objects(auth,objects)
 
-    commit[REMOTE_ADDR] = request.remote_addr
+    commit[REMOTE_ADDR] = bottle.request.remote_addr
 
     # Now store the commit as another object
     commit_obj = store_commit(auth, commit)
@@ -362,6 +413,7 @@ def commit_api(auth):
 
 def search_html(auth):
     """User interface for searching"""
+    import bottle
     (doc,main) = webmaint.get_doc()
     grid = webmaint.apply_das_template(doc,title=f'DVS Search')
     grid.add_tag_text('p','Search:')
