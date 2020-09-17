@@ -4,6 +4,8 @@ AWS_METADATA_SHA1='uscb-object-sha1' # the hash on the S3 file
 AWS_METADATA_ST_MTIME='uscb-object-st_mtime' # the time on the file
 AWS_METADATA_ST_SIZE='uscb-object-st_size' # the size of the object
 ID='id'
+
+# Search API
 SEARCH='search'
 BEFORE='before'                 # commit: list of hashes before the commit
 COMMIT='commit'                 # commit endpoint
@@ -34,3 +36,10 @@ REMOTE_ADDR='remote_addr'       # remote address for a commit
 RESULT='result'                 # a single dict
 RESULTS='results'               # a list of dicts
 CREATED='created'
+
+
+
+# Dump
+DUMP='dump'
+LIMIT='limit'
+OFFSET='offset'
