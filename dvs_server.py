@@ -145,7 +145,9 @@ def do_v2search(auth, *, search, debug=False):
     if len(vals)==0:
         return []
 
-    return dbfile.DBMySQL.csfr(auth, cmd + " OR ".join(wheres), vals, asDicts=True, debug=debug)
+    rows = dbfile.DBMySQL.csfr(auth, cmd + " OR ".join(wheres), vals, asDicts=True, debug=debug)
+    # load the JSON...
+    return [{**row, **{OBJECT:json.loads(row[OBJECT])}} for row in rows]
 
 
 def get_hashid(auth, hexhash, etag):

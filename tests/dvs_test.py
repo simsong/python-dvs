@@ -34,14 +34,14 @@ from dvs_test import DVS_DEMO_FILE,DVS_DEMO_PATH
 from dvs.dvs_constants import *
 
 
-def test_get_file_update():
+def test_get_file_observation_with_hash():
     warnings.filterwarnings("ignore", module="bottle")
     assert os.path.exists(DVS_DEMO_PATH)
-    update = dvs.helpers.get_file_update(DVS_DEMO_PATH)
+    update = dvs.helpers.get_file_observation_with_hash(DVS_DEMO_PATH)
     assert update[FILENAME]==DVS_DEMO_FILE
     assert update[DIRNAME]==os.path.dirname(__file__)
-    assert update[HEXHASH]=='666d6346e4bf5534c205d842567e0fbe82866ba3'
-    assert update[METADATA][ST_SIZE]==118
+    assert update[FILE_HASHES][SHA1]=='666d6346e4bf5534c205d842567e0fbe82866ba3'
+    assert update[FILE_METADATA][ST_SIZE]==118
     
 @pytest.fixture
 def do_commit():
@@ -63,13 +63,13 @@ def do_s3commit():
 
 def test_do_search(do_commit,do_s3commit):
     """Search the file that was just registered and see if its hash is present"""
-    hexhash = dvs.helpers.hash_file( do_commit )[HEXHASH]
+    hashes = dvs.helpers.hash_file( do_commit )
     
     searches = dvs.dvs.do_search([do_commit], debug=True)
     for search in searches:
         for result in search[RESULTS]:
-            if (result.get(FILENAME,None) == os.path.basename(do_commit)  and
-                result.get(HEXHASH,None)  == hexhash):
+            if (result[OBJECT][FILENAME] == os.path.basename(do_commit)  and
+                result[OBJECT][FILE_HASHES][SHA1] == hashes[SHA1]):
                 logging.info("Found %s", do_commit)
                 return 
     warnings.warn("Searching for %s did not find result in:\n%s" 

@@ -179,7 +179,7 @@ def do_commit_local_files(commit, paths):
         # If any of the objects has a metadata that matches, and it has a hash, use it
         obj = None
         for result in results:
-            objr = json.loads(result[OBJECT])
+            objr = result[OBJECT]
             if (objr.get(DIRNAME,None)==dirname  and
                 objr.get(FILENAME,None)==filename and
                 objr.get(FILE_METADATA,None)==file_metadata and
@@ -192,7 +192,7 @@ def do_commit_local_files(commit, paths):
                 logging.debug("Not in %s",result)
         if obj is None:
             logging.debug("Could not find hash; hashing file")
-            obj = {**get_file_observation(path), **{FILE_HASHES:hash_file(path)}}
+            obj = get_file_observation_with_hash(path)
         file_objs.append(obj)
     return do_commit_send(commit,file_objs)
 
@@ -246,10 +246,6 @@ def render_search(obj):
         print("   not on file\n")
         return
     for (ct,result) in enumerate(obj[RESULTS]):
-        try:
-            result[OBJECT] = json.loads(result[OBJECT])
-        except KeyError:
-            pass
         if ct>0:
             print("   ---   ")
         # Go through result and delete stuff we don't want to see and reformat what we need to reformat
@@ -277,6 +273,7 @@ if __name__ == "__main__":
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
     group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
     group.add_argument("--dump",           help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
+    group.add_argument("--cp",             help="Copy file1 to file2 and log in DVS", action='store_true')
     clogging.add_argument(parser,loglevel_default='WARNING')
     args = parser.parse_args()
     if args.debug:
@@ -304,3 +301,8 @@ if __name__ == "__main__":
         offset = int(args.path[1]) if len(args.path)>1 else None
         obj = do_dump(limit,offset)
         print(json.dumps(obj,indent=4,default=str))
+    elif args.cp:
+        if len(args.path)!=2:
+            print("--cp requires 2 arguments",file=sys.stderr)
+            exit(1)
+        do_cp(args.path[0],args.path[1])

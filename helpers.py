@@ -94,9 +94,9 @@ def get_file_observation(path):
               DIRNAME  : os.path.dirname(fullpath),
               HOSTNAME : socket.gethostname()}
 
-def get_file_observeration_with_hash(path):
+def get_file_observation_with_hash(path):
     """Return a file update with the hash"""
-    return {**get_file_observation(path),**hash_file(path)}
+    return {**get_file_observation(path), **{FILE_HASHES:hash_file(path)}}
 
 
 def objects_dict(objects):
