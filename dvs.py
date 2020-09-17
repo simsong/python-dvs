@@ -242,34 +242,24 @@ def do_dump(limit, offset):
 
 
 def render_search(obj):
-    count = 0
-    FMT = "{:>20}: {:<}"
-    print(f"{obj[SEARCH][FILENAME]}:")
     if len(obj[RESULTS])==0:
         print("   not on file\n")
         return
-    for result in obj[RESULTS]:
-        if count>0:
+    for (ct,result) in enumerate(obj[RESULTS]):
+        try:
+            result[OBJECT] = json.loads(result[OBJECT])
+        except KeyError:
+            pass
+        if ct>0:
             print("   ---   ")
-        for (k,v) in sorted(result.items()):
-            if k==NOTES:
-                continue
-            elif k==FILE_METADATA:
-                for (kk,vv) in json.loads(v).items():
-                    if kk==ST_SIZE:
-                        print(FMT.format('size',vv))
-                    elif kk==ST_MTIME:
-                        print(FMT.format('mtime',time.asctime(time.localtime(int(vv)))))
-                    elif kk==ST_CTIME:
-                        print(FMT.format('ctime',time.asctime(time.localtime(int(vv)))))
-            elif k==METADATA_MTIME:
-                print(FMT.format(METADATA_MTIME,time.asctime(time.localtime(int(v)))))
-            else:
-                print(FMT.format(k,v))
-        if NOTES in result:
-            for note in sorted(result[NOTES],key=lambda note:note[CREATED]):
-                print(note[CREATED],note[AUTHOR],note[NOTE])
-        count += 1
+        # Go through result and delete stuff we don't want to see and reformat what we need to reformat
+        for (a,b) in ((FILE_METADATA,ST_MTIME),
+                      (FILE_METADATA,ST_CTIME)):
+            try:
+                result[OBJECT][a][b] = time.asctime(time.localtime(int(result[OBJECT][a][b]))) + " (converted)"
+            except KeyError:
+                pass
+        print(json.dumps(result,indent=4,default=str))
         
     print("")
 

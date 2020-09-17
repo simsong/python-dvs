@@ -96,9 +96,9 @@ def do_v2search(auth, *, search, debug=False):
     search_any = search.get(SEARCH_ANY,None)
     search_hashes = []
     if helpers.is_hexadecimal(search_any):
-        search_hashes.append(search_any)
+        search_hashes.append(search_any + "%") # add the wildcard
     if HEXHASH in search:
-        search_hashes.append(search.get(HEXHASH))
+        search_hashes.append(search.get(HEXHASH)+"%") # add the wildcard
     
     search_filenames = []
     if search_any:
@@ -112,10 +112,22 @@ def do_v2search(auth, *, search, debug=False):
     if DIRNAME in search:
         search_dirnames.append(search.get(FILENAME))
 
+    search_hostnames = []
+    if search_any:
+        search_hostnames.append(search_any)
+    if HOSTNAME in search:
+        search_hostnames.append(search.get(HOSTNAME))
+
     if search_hashes:
         wheres.extend([" (hexhash LIKE %s) "] * len(search_hashes))
         vals.extend(search_hashes)
-        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hexhash')) LIKE %s) "] * len(search_hashes))
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.md5')) LIKE %s) "] * len(search_hashes))
+        vals.extend(search_hashes)
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha1')) LIKE %s) "] * len(search_hashes))
+        vals.extend(search_hashes)
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha256')) LIKE %s) "] * len(search_hashes))
+        vals.extend(search_hashes)
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha512')) LIKE %s) "] * len(search_hashes))
         vals.extend(search_hashes)
 
     if search_filenames:
@@ -124,6 +136,10 @@ def do_v2search(auth, *, search, debug=False):
 
     if search_dirnames:
         wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.dirname')) LIKE %s) "] * len(search_dirnames))
+        vals.extend(search_dirnames)
+
+    if search_hostnames:
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hostname')) LIKE %s) "] * len(search_dirnames))
         vals.extend(search_dirnames)
 
     if len(vals)==0:
