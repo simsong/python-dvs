@@ -26,8 +26,8 @@ import webmaint
 from dvs_constants import *
 import helpers
 
-def do_search(auth, *, search, debug=False):
-    """Implements the low-level search. This will change when we move to GraphQL.
+def do_v1search(auth, *, search, debug=False):
+    """Implements the low-level v2 search. This will change when we move to GraphQL.
     Currently the search is a dictionary that is matched against. The special wildcard SEARCH_ANY
     is matched against all possible fields. the response is a list of dictionaries of all matches.
     """
@@ -81,6 +81,55 @@ def do_search(auth, *, search, debug=False):
         return []
     cmd = cmd + " OR ".join(wheres) 
     return dbfile.DBMySQL.csfr(auth, cmd, vals, asDicts=True, debug=debug)
+
+
+def do_v2search(auth, *, search, debug=False):
+    """Implements the low-level v2 search. This will change when we move to GraphQL.
+    Currently the search is a dictionary that is matched against. The special wildcard SEARCH_ANY
+    is matched against all possible fields. the response is a list of dictionaries of all matches.
+    Right now there is no indexing on the objects. We may wish to create an index for the properties that we care about.
+    Perhaps we should have used MongoDB?
+    """
+    cmd = """SELECT objectid,created,hexhash,object,url from dvs_objects where """
+    wheres = []
+    vals   = []
+    search_any = search.get(SEARCH_ANY,None)
+    search_hashes = []
+    if helpers.is_hexadecimal(search_any):
+        search_hashes.append(search_any)
+    if HEXHASH in search:
+        search_hashes.append(search.get(HEXHASH))
+    
+    search_filenames = []
+    if search_any:
+        search_filenames.append(search_any)
+    if FILENAME in search:
+        search_filenames.append(search.get(FILENAME))
+
+    search_dirnames = []
+    if search_any:
+        search_dirnames.append(search_any)
+    if DIRNAME in search:
+        search_dirnames.append(search.get(FILENAME))
+
+    if search_hashes:
+        wheres.extend([" (hexhash LIKE %s) "] * len(search_hashes))
+        vals.extend(search_hashes)
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hexhash')) LIKE %s) "] * len(search_hashes))
+        vals.extend(search_hashes)
+
+    if search_filenames:
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.filename')) LIKE %s) "] * len(search_filenames))
+        vals.extend(search_filenames)
+
+    if search_dirnames:
+        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.dirname')) LIKE %s) "] * len(search_dirnames))
+        vals.extend(search_dirnames)
+
+    if len(vals)==0:
+        return []
+
+    return dbfile.DBMySQL.csfr(auth, cmd + " OR ".join(wheres), vals, asDicts=True, debug=debug)
 
 
 def get_hashid(auth, hexhash, etag):
@@ -226,7 +275,7 @@ def search_api(auth):
         bottle.response.status = 404
         return f"Searches parameter must be a JSON-encoded list of dictionaries"
     responses = [{SEARCH:search,
-                 RESULTS:do_search(auth,search=search, debug=bottle.request.params.debug)} 
+                 RESULTS:do_v2search(auth,search=search, debug=bottle.request.params.debug)} 
                  for search in searches]
 
     add_notes(auth,responses)

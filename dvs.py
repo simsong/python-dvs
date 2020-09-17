@@ -53,8 +53,6 @@ def do_commit_send(commit,file_objs):
     # If there are multiple file_objs and a note or a dataset, create an update for the dataset, give the dataset
     # that note, and send it as well
 
-    commit = {}
-
     # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON
     objects = objects_dict(file_objs)
     commit[BEFORE] = list(objects.keys())
@@ -242,7 +240,7 @@ if __name__ == "__main__":
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument("path", nargs='*', help="One or more files or directories to process")
-    parser.add_argument("-m", "--message", help="Message when registering the presence of a file")
+    parser.add_argument("--message", "-m", help="Message when registering the presence of a file")
     parser.add_argument("--dataset", help="Specifies the name of a dataset when registering a file")
     parser.add_argument("--debug", action='store_true')
     parser.add_argument("--garfi303", action='store_true')
