@@ -353,6 +353,18 @@ def store_commit(auth,commit):
     store_objects(auth,objects)
     return objects
 
+def dump_objects(auth,limit,offset):
+    """Returns objects from offset..limit, in reverse order. If offset is NULL, start at the last"""
+    cmd = "SELECT * from dvs_objects order by objectid desc "
+    vals = []
+    if limit:
+        cmd += " LIMIT %s "
+        vals.append(limit)
+    if offset:
+        cmd += " OFFSET %s "
+        vals.append(offset)
+    return dbfile.DBMySQL.csfr(auth,cmd,vals,asDicts=True)
+
 def commit_api(auth):
     """Bottle interface for commits."""
     import bottle
@@ -409,6 +421,37 @@ def commit_api(auth):
     # Now store the commit as another object
     commit_obj = store_commit(auth, commit)
     return json.dumps( commit_obj,default=str)
+
+
+def dump_api(auth):
+    """API for dumping"""
+    import bottle
+
+    try:
+        dump  = json.loads(bottle.request.params.dump)
+    except json.decoder.JSONDecodeError:
+        bottle.response.status = 400
+        return f"dump parameter is not a valid JSON value"
+
+    if LIMIT in dump:
+        try:
+            limit = int(dump[LIMIT])
+        except ValueError:
+            bottle.response.status = 400
+            return "limit must be an integer."
+    else:
+        limit = None
+
+    if OFFSET in dump:
+        try:
+            offset = int(dump[OFFSET])
+        except ValueError:
+            bottle.response.status = 400
+            return "offset must be an integer."
+    else:
+        offset = None
+
+    return json.dumps( dump_objects(auth,limit,offset), default=str)
 
 
 def search_html(auth):

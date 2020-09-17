@@ -32,7 +32,9 @@ from helpers import *
 #urllib3.disable_warnings()
 
 ENDPOINTS = {SEARCH:"https://dasexperimental.ite.ti.census.gov/api/dvs/search",
-             COMMIT:"https://dasexperimental.ite.ti.census.gov/api/dvs/commit"}
+             COMMIT:"https://dasexperimental.ite.ti.census.gov/api/dvs/commit",
+             DUMP:"https://dasexperimental.ite.ti.census.gov/api/dvs/dump"
+}
 #VERIFY=False
 
 VERIFY=False
@@ -184,8 +186,6 @@ def do_commit(commit, paths):
         raise RuntimeError("All files to be registered must be local or on s3://")
 
     
-
-
 def do_search(paths, debug=False):
     """Ask the server to do a broad search"""
     search_list = [{SEARCH_ANY: path, 
@@ -203,6 +203,20 @@ def do_search(paths, debug=False):
         return r.json()
     raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
     
+def do_dump(limit, offset):
+    dump = {}
+    if limit is not None:
+        dump[LIMIT] = limit
+    if offset is not None:
+        dump[OFFSET] = offset
+        
+    data = {'dump':json.dumps(dump, default=str)}
+    r = requests.post(ENDPOINTS[DUMP],data=data,verify=VERIFY)
+    if r.status_code==HTTP_OK:
+        return r.json()
+    raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
+
+
 def render_search(obj):
     count = 0
     FMT = "{:>20}: {:<}"
@@ -248,6 +262,7 @@ if __name__ == "__main__":
     group.add_argument("--search",   "-s", help="Search for information about the path", action='store_true')
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
     group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
+    group.add_argument("--dump",           help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
     clogging.add_argument(parser,loglevel_default='WARNING')
     args = parser.parse_args()
     if args.debug:
@@ -269,4 +284,9 @@ if __name__ == "__main__":
             commit[DATASET] = dataset
 
         obj = do_commit(commit, args.path)
+        print(json.dumps(obj,indent=4,default=str))
+    elif args.dump:
+        limit  = int(args.path[0]) if len(args.path)>0 else None
+        offset = int(args.path[1]) if len(args.path)>1 else None
+        obj = do_dump(limit,offset)
         print(json.dumps(obj,indent=4,default=str))
