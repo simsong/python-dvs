@@ -294,6 +294,8 @@ def search_api(auth):
 def store_objects(auth,objects):
     """Objects is a dictionary of key:values that will be stored. The value might be a URL or a dictionary"""
     assert isinstance(objects,dict)
+    if len(objects)==0:
+        return
     vals = []
     for (key,val) in objects.items():
         if isinstance(val,dict):

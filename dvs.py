@@ -96,10 +96,9 @@ def do_commit_s3_files(commit, paths):
                 print(f"{path} size ({s3_object.content_length}) does not match what we previously stored in metadata ({metadata_st_size})",file=sys.stderr)
             print("Downloading and hashing s3 object",file=sys.stderr)
             hashes = hash_filehandle(s3_object.get()['Body'])
-            print(f"{path} hashes {hashes}",file=sys.stderr)
             metadata_hashes   = json.dumps(hashes,default=str)
             metadata_st_size  = s3_object.content_length
-
+            print(f"{path} hashes {hashes}",file=sys.stderr)
             # Update the object metadata
             # https://stackoverflow.com/questions/39596987/how-to-update-metadata-of-an-existing-object-in-aws-s3-using-python-boto3
             new_metadata = {AWS_METADATA_HASHES:json.dumps(metadata_hashes,default=str),
@@ -108,15 +107,16 @@ def do_commit_s3_files(commit, paths):
             s3_object.metadata.update(new_metadata)
             s3_object.copy_from(CopySource={'Bucket':bucket,'Key':key}, Metadata=s3_object.metadata, MetadataDirective='REPLACE')
             s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guarenteed
-        
+        else:
+            print(f"Using hashes from AWS metadata: {metadata_hashes}"
 
-            file_objs.append({HOSTNAME:'s3://' + bucket,
-                              DIRNAME :os.path.dirname(key),
-                              FILENAME:os.path.basename(path),
-                              FILE_HASHES: metadata_hashes,
-                              FILE_METADATA: {ST_SIZE: str(s3_object.content_length),
-                                         ST_MTIME: str(int(time.mktime(s3_object.last_modified.timetuple())))
-                                     }})
+        file_objs.append({HOSTNAME:'s3://' + bucket,
+                          DIRNAME :os.path.dirname(key),
+                          FILENAME:os.path.basename(path),
+                          FILE_HASHES: metadata_hashes,
+                          FILE_METADATA: {ST_SIZE: str(s3_object.content_length),
+                                     ST_MTIME: str(int(time.mktime(s3_object.last_modified.timetuple())))
+                                 }})
             
     # Can we use https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
     # the StreamingBody() and do multiple gets in the background?
