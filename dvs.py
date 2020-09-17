@@ -60,6 +60,8 @@ def do_commit_send(commit,file_objs):
     commit[BEFORE] = list(objects.keys())
 
     logging.debug("objects to upload: %s",len(file_objs))
+    for (ct,obj) in enumerate(file_objs,1):
+        logging.debug("object %d: %s",ct,obj)
     logging.debug("commit: %s",json.dumps(commit,default=str,indent=4))
     r = requests.post(ENDPOINTS[COMMIT], 
                       data={'objects':canonical_json(objects),
@@ -85,8 +87,9 @@ def do_commit_s3_files(commit, paths):
         try:
             metadata_hashes    = json.loads(s3_object.metadata[AWS_METADATA_HASHES])
             metadata_st_size   = int(s3_object.metadata[AWS_METADATA_ST_SIZE])
+            assert isinstance(metadata_hashes,dict)
         except (KeyError,json.decoder.JSONDecodeError):
-            metadata_hashes   = None
+            metadata_hashes    = None
             metadata_st_size   = None
             
         if ((metadata_hashes is None) or (metadata_st_size is None) or (metadata_st_size != s3_object.content_length)):
@@ -96,20 +99,22 @@ def do_commit_s3_files(commit, paths):
                 print(f"{path} size ({s3_object.content_length}) does not match what we previously stored in metadata ({metadata_st_size})",file=sys.stderr)
             print("Downloading and hashing s3 object",file=sys.stderr)
             hashes = hash_filehandle(s3_object.get()['Body'])
-            metadata_hashes   = json.dumps(hashes,default=str)
-            metadata_st_size  = s3_object.content_length
+            st_size  = s3_object.content_length
             print(f"{path} hashes {hashes}",file=sys.stderr)
             # Update the object metadata
             # https://stackoverflow.com/questions/39596987/how-to-update-metadata-of-an-existing-object-in-aws-s3-using-python-boto3
-            new_metadata = {AWS_METADATA_HASHES:json.dumps(metadata_hashes,default=str),
-                            AWS_METADATA_ST_SIZE: str(metadata_st_size)}
+            new_metadata = {AWS_METADATA_HASHES:json.dumps(hashes,default=str),
+                            AWS_METADATA_ST_SIZE: str(st_size)}
 
             s3_object.metadata.update(new_metadata)
             s3_object.copy_from(CopySource={'Bucket':bucket,'Key':key}, Metadata=s3_object.metadata, MetadataDirective='REPLACE')
             s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guarenteed
+            metadata_hashes = hashes          # don't bother to read it again
+            metadata_st_size = st_size
         else:
-            print(f"Using hashes from AWS metadata: {metadata_hashes}"
+            print(f"Using hashes from AWS metadata: {metadata_hashes}")
 
+        assert isinstance(metadata_hashes,dict)
         file_objs.append({HOSTNAME:'s3://' + bucket,
                           DIRNAME :os.path.dirname(key),
                           FILENAME:os.path.basename(path),
