@@ -32,11 +32,15 @@ def clean_float(v):
     return int(v) if isinstance(v,float) else v
 
 def json_stat(path: str) -> dict:
-    """Performs a stat(2) of a file and returns the results in a dictionary"""
+    """Performs a stat(2) of a file and returns the results in a dictionary. Do not include atime"""
     s_obj = os.stat(path)
-    return {k: clean_float(getattr(s_obj, k)) for k in dir(s_obj) if k.startswith('st_')}
+    return {k: clean_float(getattr(s_obj, k)) for k in dir(s_obj) if k.startswith('st_') and ("atime" not in k)}
 
 def hash_filehandle(f):
+    """Right now this is done single-threaded. It could be parallelized.
+    """
+    sha512_hash = hashlib.sha512()
+    sha256_hash = hashlib.sha256()
     sha1_hash = hashlib.sha1()
     md5_hash = hashlib.md5()
     fb = f.read(BLOCK_SIZE)
@@ -45,23 +49,20 @@ def hash_filehandle(f):
         md5_hash.update(fb)
         fb = f.read(BLOCK_SIZE)
     logging.debug("End hashing %s. sha1=%s",f,sha1_hash.hexdigest())
-    return {HEXHASH:sha1_hash.hexdigest(),
-            'md5':md5_hash.hexdigest()}
+    return {SHA512:sha512_hash.hexdigest(),
+            SHA256:sha256_hash.hexdigest(),
+            SHA1:sha1_hash.hexdigest(),
+            MD5:md5_hash.hexdigest()}
     
 
 def hash_file(fullpath):
-    """Hash a file and return its sha1.
-    Right now this is a 100% python
-    implementation, but we should exec out to openssl for faster
-    performance for large files It would be really nice to move to a
-    parallelized hash. 
-    """
     logging.debug("Start hashing %s",fullpath)
     with open(fullpath, 'rb') as f:
         return hash_filehandle(f)
 
 def hexhash_string(s):
     """Just return the hexadecimal SHA1 of a string"""
+    assert HEXHASH_ALG == SHA1
     sha1_hash = hashlib.sha1()
     sha1_hash.update(s.encode('utf-8'))
     return sha1_hash.hexdigest()
@@ -85,20 +86,18 @@ def canonical_json_hexhash(obj):
     """Turns obj into a string in the canonical json format"""
     return hexhash_string(json.dumps(obj,sort_keys=True,default=str))
 
-def get_file_update(path, prev_mtime=None):
-    """Analyze a file and return its metadata. If prev_mtime is set and mtime hasn't changed, don't hash."""
+def get_file_observation(path):
+    """Return a file update without the file hashes"""
     fullpath = os.path.abspath(path)
-    update = {METADATA : json_stat(path),
+    return {FILE_METADATA : json_stat(path),
               FILENAME : os.path.basename(fullpath),
               DIRNAME  : os.path.dirname(fullpath),
-              HOSTNAME : socket.gethostname(),
-              TIME     : int(time.time())
-    }
-    # If we don't have the previous mtime, or if it has changed,
-    # re-hash the file and return that too
-    if update[METADATA][ST_MTIME] != prev_mtime:
-        update = {**update, **hash_file(fullpath)}
-    return update
+              HOSTNAME : socket.gethostname()}
+
+def get_file_observation_with_hash(path):
+    """Return a file update with the hash"""
+    return {**get_file_observation(path), **{FILE_HASHES:hash_file(path)}}
+
 
 def objects_dict(objects):
     """Given a list of objects, return a dictionary where the key for each object is is canonical_json_hexhash"""

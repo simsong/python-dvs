@@ -77,3 +77,30 @@ The fundamental transaction to the server is:
 The server returns the committed objects.
 
 Notes are a commit that has a `before` and a `comment` field.   
+
+
+# Examples
+## Data stored for an object:
+```json
+ {"hashes": {"md5": "3ae9e58a7b9960539bfc8598c206ace3", 
+             "sha1": "666d6346e4bf5534c205d842567e0fbe82866ba3", 
+             "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", 
+             "sha512": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"}, 
+  "dirname": "/mnt2/home/garfi303adm/public_html/bin/dvs/tests", 
+  "filename": "dvs_demo.txt", 
+  "hostname": "ir7dascp001.ite.ti.census.gov", 
+  "metadata": {"st_dev": 66305, 
+               "st_gid": 200000, 
+               "st_ino": 237900809, 
+               "st_uid": 201830676, 
+               "st_mode": 33188, 
+               "st_rdev": 0, 
+               "st_size": 118, 
+               "st_ctime": 1599159172, 
+               "st_mtime": 1599159172, 
+               "st_nlink": 1, 
+               "st_blocks": 8, 
+               "st_blksize": 4096, 
+               "st_ctime_ns": 1599159172249671751, 
+               "st_mtime_ns": 1599159172249671751}}
+```

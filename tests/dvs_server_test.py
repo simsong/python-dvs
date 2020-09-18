@@ -52,21 +52,6 @@ def test_store_objects(dbwriter_auth):
     assert url3 in vals
 
     
-def test_do_file_update(dbwriter_auth):
-    """Store a file update for a single file in the database"""
-    warnings.filterwarnings("ignore", module="pymysql.cursors")
-    warnings.filterwarnings("ignore", module="bottle")
-    if dbwriter_auth is None:
-        warnings.warn("Cannot run without webmaint")
-        return
-    
-    update = dvs.helpers.get_file_update(DVS_DEMO_PATH)
-    # make sure the update object is stored
-    dvs.dvs_server.store_objects(dbwriter_auth, dvs.helpers.objects_dict([update])) 
-    # Do it
-    dvs.dvs_server.do_update(dbwriter_auth, update)
-
-
 def test_store_commit(dbwriter_auth):
     """Store a file update for a single file in the database"""
     warnings.filterwarnings("ignore", module="pymysql.cursors")
@@ -75,7 +60,7 @@ def test_store_commit(dbwriter_auth):
         warnings.warn("Cannot run without webmaint")
         return
     
-    update = dvs.helpers.get_file_update(DVS_DEMO_PATH)
+    update = dvs.helpers.get_file_observation_with_hash(DVS_DEMO_PATH)
     objects = dvs.helpers.objects_dict([update])
 
     # make sure the update object is stored
@@ -85,16 +70,3 @@ def test_store_commit(dbwriter_auth):
     dvs.dvs_server.store_commit(dbwriter_auth, commit)
 
 
-def test_do_note(dbwriter_auth):
-    warnings.filterwarnings("ignore", module="pymysql.cursors")
-    update = dvs.helpers.get_file_update(DVS_DEMO_PATH)
-    note = f"This is note {int(time.time())}"
-    dvs.dvs_server.add_note(dbwriter_auth, hexhash=update[HEXHASH], author=os.environ['USER'], note=note)
-
-    notes = dvs.dvs_server.get_notes(dbwriter_auth, update[HEXHASH])
-    for n in notes:
-        if n['note']==note:
-            return True
-    raise RuntimeError(f"Could not find note '{note}' in '{notes}'")
-
-        
