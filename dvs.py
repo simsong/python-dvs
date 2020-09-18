@@ -295,7 +295,11 @@ def render_search(obj):
     print("")
 
 
-def do_cp(src_path,dst_path):
+def print_commit(commit):
+    print("COMMIT:")
+    print(json.dumps(obj,indent=4,default=str))
+
+def do_cp(commit,src_path,dst_path):
     """Implement a file copy, with the fact of the copy recorded in the DVS"""
     if not os.path.exists(src_path):
         raise FileNotFoundError(src_path)
@@ -307,8 +311,14 @@ def do_cp(src_path,dst_path):
     t0 = time.time()
     src_obj = get_file_observation_with_hash(src_path)
     shutil.copyfile(src_path,dst_path)
+    method_obj = get_file_observation_with_hash(__file__)
     dst_obj = get_file_observation_with_hash(dst_path)
-    
+    commit[DURATION] = time.time() - t0
+    return do_commit_send(commit,{BEFORE:[src_obj],
+                                  METHOD:[method_obj],
+                                  AFTER:[dst_obj]})
+
+                                  
     
 
 if __name__ == "__main__":
@@ -345,15 +355,13 @@ if __name__ == "__main__":
         for search in do_search(args.path, debug=args.debug):
             render_search(search)
     elif args.register or args.commit:
-        obj = do_commit(commit, args.path)
-        print(json.dumps(obj,indent=4,default=str))
+        print_commit( do_commit(commit, args.path))
     elif args.dump:
         limit  = int(args.path[0]) if len(args.path)>0 else None
         offset = int(args.path[1]) if len(args.path)>1 else None
-        obj = do_dump(limit,offset)
-        print(json.dumps(obj,indent=4,default=str))
+        print_commit( do_dump(limit,offset))
     elif args.cp:
         if len(args.path)!=2:
             print("--cp requires 2 arguments",file=sys.stderr)
             exit(1)
-        do_cp(args.path[0],args.path[1])
+        print_commit( do_cp(commit,args.path[0],args.path[1]))

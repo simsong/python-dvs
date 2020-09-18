@@ -19,10 +19,15 @@ SHA1='sha1'
 SHA256='sha256'
 SHA512='sha512'
 
+
 # Search API
 SEARCH='search'
 OBJECT='object'
 BEFORE='before'                 # commit: list of hashes before the commit
+
+# Object properties
+
+# Commit
 COMMIT='commit'                 # commit endpoint
 AFTER='after'                   # commit: list of hashes after the commit
 MESSAGE='message'               # commit: message with the commit
@@ -36,7 +41,6 @@ AUTHOR='author'                 # commit: author of commit
 DATASET='datasets'              # commit: name of the dataset
 HOSTNAME='hostname'
 PATH='path'
-TIME='time'
 HEXHASH='hexhash'
 HEXHASH_ALG='sha1'              # which algorithm we are using
 SEARCH_ANY='*'
@@ -45,6 +49,8 @@ REMOTE_ADDR='remote_addr'       # remote address for a commit
 RESULT='result'                 # a single dict
 RESULTS='results'               # a list of dicts
 CREATED='created'
+TIME='time'                     # commit - when method was finished
+DURATION='duration'             # commit - how long the commit took (so we don't have a clock skew issue)
 
 
 
