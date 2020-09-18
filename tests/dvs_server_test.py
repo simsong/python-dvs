@@ -52,21 +52,6 @@ def test_store_objects(dbwriter_auth):
     assert url3 in vals
 
     
-def test_do_file_update(dbwriter_auth):
-    """Store a file update for a single file in the database"""
-    warnings.filterwarnings("ignore", module="pymysql.cursors")
-    warnings.filterwarnings("ignore", module="bottle")
-    if dbwriter_auth is None:
-        warnings.warn("Cannot run without webmaint")
-        return
-    
-    update = dvs.helpers.get_file_observation_with_hash(DVS_DEMO_PATH)
-    # make sure the update object is stored
-    dvs.dvs_server.store_objects(dbwriter_auth, dvs.helpers.objects_dict([update])) 
-    # Do it
-    dvs.dvs_server.do_update(dbwriter_auth, update)
-
-
 def test_store_commit(dbwriter_auth):
     """Store a file update for a single file in the database"""
     warnings.filterwarnings("ignore", module="pymysql.cursors")

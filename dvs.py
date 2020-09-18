@@ -33,8 +33,8 @@ from helpers import *
 
 ENDPOINTS = {SEARCH:"https://dasexperimental.ite.ti.census.gov/api/dvs/search",
              COMMIT:"https://dasexperimental.ite.ti.census.gov/api/dvs/commit",
-             DUMP:"https://dasexperimental.ite.ti.census.gov/api/dvs/dump"
-}
+             DUMP:"https://dasexperimental.ite.ti.census.gov/api/dvs/dump" }
+
 #VERIFY=False
 
 VERIFY=False
@@ -48,95 +48,101 @@ def set_debug_endpoints(prefix):
         ENDPOINTS[e] = ENDPOINTS[e].replace("census.gov/api",f"census.gov/{prefix}/api")
 
 
-def do_commit_send(commit,file_objs):
-    """Send the file_objs with a given note and dataset"""
-    # Finally, send the file_objs to the server with the note
-    # If there is only a single update, send the note with it. 
-    # If there are multiple file_objs and a note or a dataset, create an update for the dataset, give the dataset
-    # that note, and send it as well
+def do_commit_send(commit,file_obj_dict):
+    """Continue to build the commit.
+    @param commit - a dictionary with the base fields.
+    @param file_objec_dict - A dictionary with optional BEFORE, METHOD, and AFTER objects, 
+                 which will be seralized and stored as part of the transaction.
+    """
 
     # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON
-    objects = objects_dict(file_objs)
-    commit[BEFORE] = list(objects.keys())
+    all_objects = {}
+    # grab the BEFORE, METHOD, and AFTER object lists.
+    for (which,file_objs) in file_obj_dict.items():
+        objects       = objects_dict(file_objs)
+        commit[which] = list(objects.keys())
+        all_objects   = {**all_objects, **objects}
 
-    logging.debug("objects to upload: %s",len(file_objs))
+    ### DEBUG CODE START
+    logging.debug("# of objects to upload: %d",len(file_objs))
     for (ct,obj) in enumerate(file_objs,1):
         logging.debug("object %d: %s",ct,obj)
     logging.debug("commit: %s",json.dumps(commit,default=str,indent=4))
+    ### DEBUG CODE END
+
+    # Send the objects and the commit
     r = requests.post(ENDPOINTS[COMMIT], 
-                      data={'objects':canonical_json(objects),
+                      data={'objects':canonical_json(all_objects),
                             'commit':canonical_json(commit)},
                       verify=VERIFY)
     logging.debug("response: %s",r)
     if r.status_code!=HTTP_OK:
         raise RuntimeError(f"Error from server: {r.status_code}: {r.text}")
+
+    # Return the commit object
     return r.json()
         
 
-def do_commit_s3_files(commit, paths):
-    """Get the metadata for each s3 object.
-    Then do a search and ask the sever if it knows for an object with this etag.
-    If the backend knows about this etag, then we don't need to hash again."""
-
-    file_objs = []
-    s3_objects = {}
+def get_s3file_observation_with_hash(path):
+    """Given an S3 path, 
+    1. Get the metadata from AWS for the object. 
+    2. Given this metadata, see if there is metadata on the Object server that matches.
+    3. If there is, use the hash that is already on the object server.
+    4. If not, download the S3 file and hash it. 
+    5. Return an observation"""
     s3 = boto3.resource('s3')
-    for path in paths:
-        (bucket,key) = ctools.s3.get_bucket_key(path)
-        s3_object              = s3.Object(bucket,key)
-        try:
-            metadata_hashes    = json.loads(s3_object.metadata[AWS_METADATA_HASHES])
-            metadata_st_size   = int(s3_object.metadata[AWS_METADATA_ST_SIZE])
-            assert isinstance(metadata_hashes,dict)
-        except (KeyError,json.decoder.JSONDecodeError):
-            metadata_hashes    = None
-            metadata_st_size   = None
-            
-        if ((metadata_hashes is None) or (metadata_st_size is None) or (metadata_st_size != s3_object.content_length)):
-            if metadata_hashes is None:
-                print(f"{path} does not have hashes in object metadata",file=sys.stderr)
-            if (metadata_st_size is not None) and int(metadata_st_size) != int(s3_object.content_length):
-                print(f"{path} size ({s3_object.content_length}) does not match what we previously stored in metadata ({metadata_st_size})",file=sys.stderr)
-            print("Downloading and hashing s3 object",file=sys.stderr)
-            hashes = hash_filehandle(s3_object.get()['Body'])
-            st_size  = s3_object.content_length
-            print(f"{path} hashes {hashes}",file=sys.stderr)
-            # Update the object metadata
-            # https://stackoverflow.com/questions/39596987/how-to-update-metadata-of-an-existing-object-in-aws-s3-using-python-boto3
-            new_metadata = {AWS_METADATA_HASHES:json.dumps(hashes,default=str),
-                            AWS_METADATA_ST_SIZE: str(st_size)}
-
-            s3_object.metadata.update(new_metadata)
-            s3_object.copy_from(CopySource={'Bucket':bucket,'Key':key}, Metadata=s3_object.metadata, MetadataDirective='REPLACE')
-            s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guarenteed
-            metadata_hashes = hashes          # don't bother to read it again
-            metadata_st_size = st_size
-        else:
-            print(f"Using hashes from AWS metadata: {metadata_hashes}")
-
+    (bucket,key)           = ctools.s3.get_bucket_key(path)
+    s3_object              = s3.Object(bucket,key)
+    try:
+        metadata_hashes    = json.loads(s3_object.metadata[AWS_METADATA_HASHES])
+        metadata_st_size   = int(s3_object.metadata[AWS_METADATA_ST_SIZE])
         assert isinstance(metadata_hashes,dict)
-        file_objs.append({HOSTNAME:'s3://' + bucket,
-                          DIRNAME :os.path.dirname(key),
-                          FILENAME:os.path.basename(path),
-                          FILE_HASHES: metadata_hashes,
-                          FILE_METADATA: {ST_SIZE: str(s3_object.content_length),
-                                     ST_MTIME: str(int(time.mktime(s3_object.last_modified.timetuple())))
-                                 }})
-            
-    # Can we use https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
-    # the StreamingBody() and do multiple gets in the background?
-    # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
-    return do_commit_send(commit,file_objs)
+    except (KeyError,json.decoder.JSONDecodeError):
+        metadata_hashes    = None
+        metadata_st_size   = None
 
+    if ((metadata_hashes is None) or (metadata_st_size is None) or (metadata_st_size != s3_object.content_length)):
+        if metadata_hashes is None:
+            print(f"{path} does not have hashes in object metadata",file=sys.stderr)
+        if (metadata_st_size is not None) and int(metadata_st_size) != int(s3_object.content_length):
+            print(f"{path} size ({s3_object.content_length}) does not match what we previously stored in metadata ({metadata_st_size})",file=sys.stderr)
+        print("Downloading and hashing s3 object",file=sys.stderr)
 
-def do_commit_local_files(commit, paths):
-    """Find local files, optionally hash them, and send them to the server.
+        # Use the StreamingBody() to download the object.
+        # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
+        # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
+
+        hashes = hash_filehandle(s3_object.get()['Body'])
+        st_size  = s3_object.content_length
+        print(f"{path} hashes {hashes}",file=sys.stderr)
+        # Update the object metadata
+        # https://stackoverflow.com/questions/39596987/how-to-update-metadata-of-an-existing-object-in-aws-s3-using-python-boto3
+        new_metadata = {AWS_METADATA_HASHES:json.dumps(hashes,default=str),
+                        AWS_METADATA_ST_SIZE: str(st_size)}
+
+        s3_object.metadata.update(new_metadata)
+        s3_object.copy_from(CopySource={'Bucket':bucket,'Key':key}, Metadata=s3_object.metadata, MetadataDirective='REPLACE')
+        s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guarenteed
+        metadata_hashes = hashes          # don't bother to read it again
+        metadata_st_size = st_size
+    else:
+        print(f"Using hashes from AWS metadata: {metadata_hashes}")
+    assert isinstance(metadata_hashes,dict)
+    return {HOSTNAME:'s3://' + bucket,
+            DIRNAME :os.path.dirname(key),
+            FILENAME:os.path.basename(path),
+            FILE_HASHES: metadata_hashes,
+            FILE_METADATA: {ST_SIZE: str(s3_object.content_length),
+                            ST_MTIME: str(int(time.mktime(s3_object.last_modified.timetuple()))) }}
+    
+
+def get_file_observations_with_remote_cache(paths):
+    """Create a list of file observations for a list of paths.
     1. Send the list of paths to the server and ask if the mtime for any of them are known
        We make a search_dictionary, which is the search object for each of the paths passed in,
        indexed by path
     2. Hash the files that are not known to the server.
-    3. Send to the server a list of all of the files as a commit.
-    TODO: plug-in additional hash attributes.
+    3. Return the list of observation objects.
     """
     logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
     hostname = socket.gethostname()
@@ -194,7 +200,36 @@ def do_commit_local_files(commit, paths):
             logging.debug("Could not find hash; hashing file")
             obj = get_file_observation_with_hash(path)
         file_objs.append(obj)
-    return do_commit_send(commit,file_objs)
+    return file_objs
+
+
+def do_commit_local_files(commit, paths):
+    """Find local files, optionally hash them, and send them to the server.
+    1. Send the list of paths to the server and ask if the mtime for any of them are known
+       We make a search_dictionary, which is the search object for each of the paths passed in,
+       indexed by path
+    2. Hash the files that are not known to the server.
+    3. Send to the server a list of all of the files as a commit.
+    TODO: plug-in additional hash attributes.
+    """
+    file_objs = get_file_observations_with_remote_cache(paths)
+    return do_commit_send(commit,{BEFORE:file_objs})
+
+
+def do_commit_s3_files(commit, paths):
+    """Get the metadata for each s3 object.
+    Then do a search and ask the sever if it knows for an object with this etag.
+    If the backend knows about this etag, then we don't need to hash again.
+    This could be made more efficient by doing the multiple S3 actions in parallel.
+    """
+    file_objs = []
+    s3_objects = {}
+    s3 = boto3.resource('s3')
+    for path in paths:
+        file_objs.append( get_s3file_observation_with_hash(path) )
+            
+    return do_commit_send(commit,{BEFORE:file_objs})
+
 
 def do_commit(commit, paths):
     """Given a commit and a set of paths, figure out if they are local files or s3 files, add each, and process.
@@ -210,8 +245,22 @@ def do_commit(commit, paths):
         raise RuntimeError("All files to be registered must be local or on s3://")
 
     
+def do_dump(limit, offset):
+    dump = {}
+    if limit is not None:
+        dump[LIMIT] = limit
+    if offset is not None:
+        dump[OFFSET] = offset
+        
+    data = {'dump':json.dumps(dump, default=str)}
+    r = requests.post(ENDPOINTS[DUMP],data=data,verify=VERIFY)
+    if r.status_code==HTTP_OK:
+        return r.json()
+    raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
+
+
 def do_search(paths, debug=False):
-    """Ask the server to do a broad search"""
+    """Ask the server to do a broad search for a string. Return the results."""
     search_list = [{SEARCH_ANY: path, 
                     FILENAME: os.path.basename(path) } for path in paths]
     data = {'searches':json.dumps(search_list, default=str)}
@@ -227,19 +276,6 @@ def do_search(paths, debug=False):
         return r.json()
     raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
     
-def do_dump(limit, offset):
-    dump = {}
-    if limit is not None:
-        dump[LIMIT] = limit
-    if offset is not None:
-        dump[OFFSET] = offset
-        
-    data = {'dump':json.dumps(dump, default=str)}
-    r = requests.post(ENDPOINTS[DUMP],data=data,verify=VERIFY)
-    if r.status_code==HTTP_OK:
-        return r.json()
-    raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
-
 
 def render_search(obj):
     if len(obj[RESULTS])==0:
@@ -256,9 +292,24 @@ def render_search(obj):
             except KeyError:
                 pass
         print(json.dumps(result,indent=4,default=str))
-        
     print("")
 
+
+def do_cp(src_path,dst_path):
+    """Implement a file copy, with the fact of the copy recorded in the DVS"""
+    if not os.path.exists(src_path):
+        raise FileNotFoundError(src_path)
+    if os.path.isdir(dst_path):
+        dst_path = os.path.join(dst_path, os.path.basename(src_path))
+    if os.path.exists(dst_path):
+        raise FileExistsError(dst_path)
+    
+    t0 = time.time()
+    src_obj = get_file_observation_with_hash(src_path)
+    shutil.copyfile(src_path,dst_path)
+    dst_obj = get_file_observation_with_hash(dst_path)
+    
+    
 
 if __name__ == "__main__":
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -283,17 +334,17 @@ if __name__ == "__main__":
     if args.garfi303:
         set_debug_endpoints("~garfi303adm/html")
 
+    commit = {}
+    if args.message:
+        commit[MESSAGE]= args.message
+        commit[AUTHOR] = os.getenv('USER')
+    if args.dataset:
+        commit[DATASET] = dataset
+
     if args.search:
         for search in do_search(args.path, debug=args.debug):
             render_search(search)
     elif args.register or args.commit:
-        commit = {}
-        if args.message:
-            commit[MESSAGE]= args.message
-            commit[AUTHOR] = os.getenv('USER')
-        if args.dataset:
-            commit[DATASET] = dataset
-
         obj = do_commit(commit, args.path)
         print(json.dumps(obj,indent=4,default=str))
     elif args.dump:
