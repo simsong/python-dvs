@@ -9,6 +9,8 @@ import json
 import sys
 import boto3
 import time
+import shutil
+import subprocess
 
 """
 debug with:
@@ -55,10 +57,14 @@ def do_commit_send(commit,file_obj_dict):
                  which will be seralized and stored as part of the transaction.
     """
 
+    assert isinstance(commit,dict)
+    assert isinstance(file_obj_dict,dict)
     # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON
     all_objects = {}
     # grab the BEFORE, METHOD, and AFTER object lists.
     for (which,file_objs) in file_obj_dict.items():
+        assert isinstance(file_objs,list)
+        assert all([isinstance(obj,dict) for obj in file_objs])
         objects       = objects_dict(file_objs)
         commit[which] = list(objects.keys())
         all_objects   = {**all_objects, **objects}
@@ -83,13 +89,14 @@ def do_commit_send(commit,file_obj_dict):
     return r.json()
         
 
-def get_s3file_observation_with_hash(path):
+def get_s3file_observation_with_hash(path:str):
     """Given an S3 path, 
     1. Get the metadata from AWS for the object. 
     2. Given this metadata, see if there is metadata on the Object server that matches.
     3. If there is, use the hash that is already on the object server.
     4. If not, download the S3 file and hash it. 
     5. Return an observation"""
+    assert isinstance(path, str)
     s3 = boto3.resource('s3')
     (bucket,key)           = ctools.s3.get_bucket_key(path)
     s3_object              = s3.Object(bucket,key)
@@ -136,7 +143,7 @@ def get_s3file_observation_with_hash(path):
                             ST_MTIME: str(int(time.mktime(s3_object.last_modified.timetuple()))) }}
     
 
-def get_file_observations_with_remote_cache(paths):
+def get_file_observations_with_remote_cache(paths:list):
     """Create a list of file observations for a list of paths.
     1. Send the list of paths to the server and ask if the mtime for any of them are known
        We make a search_dictionary, which is the search object for each of the paths passed in,
@@ -144,6 +151,8 @@ def get_file_observations_with_remote_cache(paths):
     2. Hash the files that are not known to the server.
     3. Return the list of observation objects.
     """
+    assert isinstance(paths,list)
+    assert all([isinstance(path,str) for path in paths])
     logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
     hostname = socket.gethostname()
     search_dicts = {ct : 
@@ -297,26 +306,45 @@ def render_search(obj):
 
 def print_commit(commit):
     print("COMMIT:")
-    print(json.dumps(obj,indent=4,default=str))
+    print(json.dumps(commit,indent=4,default=str,sort_keys=True))
 
 def do_cp(commit,src_path,dst_path):
     """Implement a file copy, with the fact of the copy recorded in the DVS"""
-    if not os.path.exists(src_path):
-        raise FileNotFoundError(src_path)
-    if os.path.isdir(dst_path):
-        dst_path = os.path.join(dst_path, os.path.basename(src_path))
-    if os.path.exists(dst_path):
-        raise FileExistsError(dst_path)
-    
+
+    use_s3 = False
     t0 = time.time()
-    src_obj = get_file_observation_with_hash(src_path)
-    shutil.copyfile(src_path,dst_path)
+    if src_path.startswith("s3://"):
+        use_s3  = True
+        src_objs = [get_s3file_observation_with_hash(src_path)]
+    else:
+        src_objs = get_file_observations_with_remote_cache([src_path])
+
+    if dst_path.startswith("s3://"):
+        use_s3  = True
+        if dst_path.endswith("/"):
+            dst_path += os.path.basename(src_path)
+    else:
+        if os.path.isdir(dst_path):
+            dst_path = os.path.join(dst_path, os.path.basename(src_path))
+        if os.path.exists(dst_path):
+            raise FileExistsError(dst_path)
+    
     method_obj = get_file_observation_with_hash(__file__)
-    dst_obj = get_file_observation_with_hash(dst_path)
+    if use_s3:
+        cmd = ['aws','s3','cp',src_path,dst_path]
+        print(" ".join(cmd))
+        subprocess.check_call(cmd)
+    else:
+        shutil.copyfile(src_path,dst_path)
+
+    if dst_path.startswith("s3://"):
+        dst_objs = [get_s3file_observation_with_hash(dst_path)]
+    else:
+        dst_objs = get_file_observations_with_remote_cache([dst_path])
     commit[DURATION] = time.time() - t0
-    return do_commit_send(commit,{BEFORE:[src_obj],
+    return do_commit_send(commit,{BEFORE:src_objs,
                                   METHOD:[method_obj],
-                                  AFTER:[dst_obj]})
+                                  AFTER:dst_objs})
 
                                   
     
@@ -334,7 +362,7 @@ if __name__ == "__main__":
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
     group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
     group.add_argument("--dump",           help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
-    group.add_argument("--cp",             help="Copy file1 to file2 and log in DVS", action='store_true')
+    group.add_argument("--cp",             help="Copy file1 to file2 and log in DVS. Also works for S3 files", action='store_true')
     clogging.add_argument(parser,loglevel_default='WARNING')
     args = parser.parse_args()
     if args.debug:

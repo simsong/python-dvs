@@ -201,7 +201,7 @@ other methods return lists of objects
 
 def dump_objects(auth,limit,offset):
     """Returns objects from offset..limit, in reverse order. If offset is NULL, start at the last"""
-    cmd = "SELECT * from dvs_objects order by objectid desc "
+    cmd = "SELECT hexhash,created,JSON_UNQUOTE(object) as object,url from dvs_objects order by objectid desc "
     vals = []
     if limit:
         cmd += " LIMIT %s "
@@ -209,7 +209,9 @@ def dump_objects(auth,limit,offset):
     if offset:
         cmd += " OFFSET %s "
         vals.append(offset)
-    return dbfile.DBMySQL.csfr(auth,cmd,vals,asDicts=True)
+    rows = dbfile.DBMySQL.csfr(auth,cmd,vals,asDicts=True)
+    # load the JSON...
+    return [{**row, **{OBJECT:json.loads(row[OBJECT])}} for row in rows]
 
 def commit_api(auth):
     """Bottle interface for commits."""
