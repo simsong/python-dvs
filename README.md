@@ -104,3 +104,8 @@ Notes are a commit that has a `before` and a `comment` field.
                "st_ctime_ns": 1599159172249671751, 
                "st_mtime_ns": 1599159172249671751}}
 ```
+# See also
+* https://dvc.org/
+* https://opendata.stackexchange.com/questions/748/is-there-a-git-for-data
+* https://locallyoptimistic.com/post/git-for-data-not-a-silver-bullet/
+* https://swagger.io/tools/swaggerhub/hosted-api-documentation/
