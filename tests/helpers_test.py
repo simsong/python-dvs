@@ -11,16 +11,16 @@ import time
 Test programs for the installed dvsserver.
 """
 
-# Get 'dvs' into the path
-sys.path.append( os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
+# Get 'dvs' and 'ctools' into the path
+from os.path import dirname,abspath
+sys.path.append( dirname(dirname(abspath(__file__))))
 import dvs
-import dvs.dvs_server
+
 
 # local directory:
-from dvs_test import DVS_DEMO_FILE,DVS_DEMO_PATH
-from dvs.dvs_constants import *
-from dvs.helpers import *
+#from dvs_test import DVS_DEMO_FILE,DVS_DEMO_PATH
+#from dvs.dvs_constants import *
+#from dvs.helpers import *
 
 
 from helpers import *
@@ -39,4 +39,3 @@ def test_is_hexadecimal():
     assert is_hexadecimal("0")==True
     assert is_hexadecimal("12345abcd")==True
     assert is_hexadecimal("Z12345abcd")==False
-

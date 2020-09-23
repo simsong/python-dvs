@@ -14,9 +14,11 @@ import subprocess
 Test programs for dvs client, both locally and to the sever
 """
 
-
 # Get 'dvs' into the path
-sys.path.append( os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from os.path import dirname,abspath
+sys.path.append( dirname(dirname(abspath(__file__))))
+import dvs
+
 
 DVS_DEMO_FILE = 'dvs_demo.txt'
 DVS_DEMO_PATH = os.path.join(os.path.dirname(__file__), DVS_DEMO_FILE)
@@ -42,7 +44,7 @@ def test_get_file_observation_with_hash():
     assert update[DIRNAME]==os.path.dirname(__file__)
     assert update[FILE_HASHES][SHA1]=='666d6346e4bf5534c205d842567e0fbe82866ba3'
     assert update[FILE_METADATA][ST_SIZE]==118
-    
+
 @pytest.fixture
 def do_commit():
     """Register one of the test files."""
@@ -54,7 +56,7 @@ def do_commit():
 
 @pytest.fixture
 def do_s3commit():
-    """Copy a file to s3 and register it to see if we can work with legacy S3 files. 
+    """Copy a file to s3 and register it to see if we can work with legacy S3 files.
     Then copy a file to s3 with our s3 copy routine"""
     subprocess.call(['aws','s3','cp',DVS_DEMO_PATH,S3LOC1])
     commit = {MESSAGE:f"This is an S3 message {int(time.time())}"}
@@ -64,15 +66,14 @@ def do_s3commit():
 def test_do_search(do_commit,do_s3commit):
     """Search the file that was just registered and see if its hash is present"""
     hashes = dvs.helpers.hash_file( do_commit )
-    
+
     searches = dvs.dvs.do_search([do_commit], debug=True)
     for search in searches:
         for result in search[RESULTS]:
             if (result[OBJECT][FILENAME] == os.path.basename(do_commit)  and
                 result[OBJECT][FILE_HASHES][SHA1] == hashes[SHA1]):
                 logging.info("Found %s", do_commit)
-                return 
-    warnings.warn("Searching for %s did not find result in:\n%s" 
+                return
+    warnings.warn("Searching for %s did not find result in:\n%s"
                   % (do_commit,json.dumps(searches,indent=4,default=str)))
     raise FileNotFoundError()
-
