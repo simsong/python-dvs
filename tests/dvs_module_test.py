@@ -18,7 +18,7 @@ sys.path.append( dirname(dirname( abspath( __file__ ) )))
 import dvs
 
 
-def simple_commit_test():
+def test_simple_commit():
     dc = dvs.DVS()
     with tempfile.NamedTemporaryFile(mode='w') as tf:
         tf.write(time.asctime()) # always different
