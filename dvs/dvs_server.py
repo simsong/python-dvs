@@ -24,7 +24,7 @@ from ctools import tydoc
 import webmaint
 
 from dvs_constants import *
-import helpers
+import dvs_helpers
 
 
 
@@ -45,11 +45,11 @@ def do_v2search(auth, *, search, debug=False):
     vals   = []
     search_any = search.get(SEARCH_ANY,None)
     search_hashes = []
-    if helpers.is_hexadecimal(search_any):
+    if dvs_helpers.is_hexadecimal(search_any):
         search_hashes.append(search_any + "%") # add the wildcard
     if HEXHASH in search:
         search_hashes.append(search.get(HEXHASH)+"%") # add the wildcard
-    
+
     search_filenames = []
     if search_any:
         search_filenames.append(search_any)
@@ -121,7 +121,7 @@ def search_api(auth):
         bottle.response.status = 404
         return f"Searches parameter must be a JSON-encoded list of dictionaries"
     responses = [{SEARCH:search,
-                 RESULTS:do_v2search(auth,search=search, debug=bottle.request.params.debug)} 
+                 RESULTS:do_v2search(auth,search=search, debug=bottle.request.params.debug)}
                  for search in searches]
 
     bottle.response.content_type = 'text/json'
@@ -138,8 +138,8 @@ def store_objects(auth,objects):
     for (key,val) in objects.items():
         if isinstance(val,dict):
             # we were given an object to store
-            val_json = helpers.canonical_json( val )
-            assert key == helpers.hexhash_string( val_json )
+            val_json = dvs_helpers.canonical_json( val )
+            assert key == dvs_helpers.hexhash_string( val_json )
             vals.append(key)
             vals.append(val_json)
             vals.append(None)
@@ -148,17 +148,17 @@ def store_objects(auth,objects):
             vals.append(key)
             vals.append(None)
             vals.append(val)
-    dbfile.DBMySQL.csfr(auth,"INSERT IGNORE INTO dvs_objects (hexhash,object,url) VALUES " 
-                        + helpers.comma_args(3,rows=len(objects),parens=True), vals)
+    dbfile.DBMySQL.csfr(auth,"INSERT IGNORE INTO dvs_objects (hexhash,object,url) VALUES "
+                        + dvs_helpers.comma_args(3,rows=len(objects),parens=True), vals)
 
 def get_objects(auth,hexhashes):
     """Returns the objects for the hexhashes. If the hexhash is a url, returns a proxy (which is a string, rather than an object)"""
-    rows = dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_objects where hexhash in" + helpers.comma_args(len(hexhashes),parens=True),
+    rows = dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_objects where hexhash in" + dvs_helpers.comma_args(len(hexhashes),parens=True),
                         hexhashes,
                         asDicts=True)
 
     return {row[HEXHASH]:(json.loads(row[OBJECT]) if row[OBJECT] else row['url']) for row in rows}
-    
+
 
 def store_commit(auth,commit):
     """The commit is an object that has hashes in BEFORE, METHOD, or AFTER
@@ -177,25 +177,25 @@ other methods return lists of objects
                 raise ValueError(f"{check} is not a list")
             if not all([isinstance(elem,str) for elem in objlist]):
                 raise ValueError(f"{check} is not a list of strings")
-            if not all([helpers.is_hexadecimal(elem) for elem in objlist]):
+            if not all([dvs_helpers.is_hexadecimal(elem) for elem in objlist]):
                 raise ValueError(f"{check} contains a value that is not a hexadecimal hash")
             hashes.extend(objlist)
     if len(hashes)==0:
         raise ValueError("Commit does not include any hexhashes in the before, method or after sections")
     # Make sure that all of the hashes are in the database
     rows = dbfile.DBMySQL.csfr(auth,
-                               "SELECT COUNT(*) FROM dvs_objects where hexhash in " 
-                               + helpers.comma_args(len(hashes),parens=True),
+                               "SELECT COUNT(*) FROM dvs_objects where hexhash in "
+                               + dvs_helpers.comma_args(len(hashes),parens=True),
                                hashes)
     assert len(rows)==1
     if rows[0][0]!=len(hashes):
         raise ValueError(f"received {len(hashes)} hashes in commit but only {rows[0][1]} are in the local database")
-    
+
     # Add the timestamp
     commit[TIME] = time.time()
 
     # store it and return the object
-    objects      = helpers.objects_dict([commit])
+    objects      = dvs_helpers.objects_dict([commit])
     store_objects(auth,objects)
     return objects
 
@@ -227,12 +227,12 @@ def commit_api(auth):
         bottle.response.status = 400
         return f"objects parameter is not a JSON-encoded dictionary"
     for (key,value) in objects.items():
-        if not helpers.is_hexadecimal(key):
+        if not dvs_helpers.is_hexadecimal(key):
             bottle.response.status = 400
             return f"object key {key} is not a hexadecimal value"
         if isinstance(value,dict):
-            cj = helpers.canonical_json(value)
-            hh = helpers.hexhash_string(cj)
+            cj = dvs_helpers.canonical_json(value)
+            hh = dvs_helpers.hexhash_string(cj)
             if key != hh:
                 bottle.response.status = 400
                 return f"object key {key} has a computed hash of {hh}"
@@ -243,7 +243,7 @@ def commit_api(auth):
         else:
             return f"object key {key} is not a dict or a string"
 
-    
+
     # Now validate the commit
     try:
         commit = json.loads(bottle.request.params.commit)
@@ -257,8 +257,8 @@ def commit_api(auth):
         if not isinstance(key,str):
             bottle.response.status=400
             return f"commit key {key} is not a string"
-        
-    # Paramters look good. Store the objects. 
+
+    # Paramters look good. Store the objects.
     # Todo: this should be done atomically, with a single SQL transaction.
 
     # Now store the new objects
@@ -312,6 +312,6 @@ def search_html(auth):
                                     tydoc.TyTag('input',attrib={'type':'submit','class':'searchButton'})],
                            attrib={'action':bottle.request.url})
 
-    
-    
+
+
     return doc.asString()
