@@ -17,13 +17,7 @@ sys.path.append( dirname(dirname(abspath(__file__))))
 import dvs
 
 
-# local directory:
-#from dvs_test import DVS_DEMO_FILE,DVS_DEMO_PATH
-#from dvs.dvs_constants import *
-#from dvs.helpers import *
-
-
-from helpers import *
+from dvs_helpers import *
 
 
 

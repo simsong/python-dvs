@@ -16,7 +16,7 @@ from os.path import dirname,abspath
 sys.path.append( dirname(dirname(abspath(__file__))))
 import dvs
 
-import dvs.helpers
+import dvs.dvs_helpers
 try:
     import dvs.dvs_server
     DVS_SERVER=True
@@ -52,7 +52,7 @@ def test_store_objects(dbwriter_auth):
     obj1 = {MESSAGE:time.asctime()}
     obj2 = {MESSAGE:time.asctime()+"test"}
     url3 = "https://www.census.gov/"
-    objects = dvs.helpers.objects_dict([obj1,obj2,url3])
+    objects = dvs.dvs_helpers.objects_dict([obj1,obj2,url3])
     dvs.dvs_server.store_objects(dbwriter_auth, objects)
 
     # Now verify that they were stored
@@ -76,8 +76,8 @@ def test_store_commit(dbwriter_auth):
         warnings.warn("Cannot run without webmaint")
         return
 
-    update = dvs.helpers.get_file_observation_with_hash(DVS_DEMO_PATH)
-    objects = dvs.helpers.objects_dict([update])
+    update = dvs.dvs_helpers.get_file_observation_with_hash(DVS_DEMO_PATH)
+    objects = dvs.dvs_helpers.objects_dict([update])
 
     # make sure the update object is stored
     dvs.dvs_server.store_objects(dbwriter_auth,objects)
