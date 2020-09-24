@@ -1,4 +1,6 @@
-# module
+"""
+Misc. functions that are used in the DAS code.
+"""
 
 import os
 import os.path
@@ -13,8 +15,7 @@ import socket
 import time
 import string
 
-from ctools import clogging
-from dvs_constants import *
+from .dvs_constants import *
 
 BLOCK_SIZE=1024*1024
 
@@ -53,7 +54,7 @@ def hash_filehandle(f):
             SHA256:sha256_hash.hexdigest(),
             SHA1:sha1_hash.hexdigest(),
             MD5:md5_hash.hexdigest()}
-    
+
 
 def hash_file(fullpath):
     logging.debug("Start hashing %s",fullpath)
@@ -66,7 +67,7 @@ def hexhash_string(s):
     sha1_hash = hashlib.sha1()
     sha1_hash.update(s.encode('utf-8'))
     return sha1_hash.hexdigest()
-    
+
 def is_hexadecimal(s):
     """Return true if s is hexadecimal string"""
     if isinstance(s,str)==False:

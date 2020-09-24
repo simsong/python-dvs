@@ -24,29 +24,30 @@ except ModuleNotFoundError:
     DVS_SERVER=False
     warnings.warn("DVS server tests skipped")
 
-# local directory:
-from dvs_test import DVS_DEMO_FILE,DVS_DEMO_PATH
-from dvs.dvs_constants import *
-
+sys.path.append( dirname(__file__))
+from dvs_test_constants import DVS_DEMO_FILE,DVS_DEMO_PATH
 
 @pytest.fixture
 def dbwriter_auth():
     if DVS_SERVER==False:
         warnings.warn("DVS Server not available")
-        yield None
-    warnings.filterwarnings("ignore", module="bottle")
-    try:
-        import webmaint
-    except ImportError:
-        warnings.warn("Cannot run first_test without webmaint")
-        yield None
-    yield webmaint.get_auth_dbwriter()
+        ret = None
+    else:
+        warnings.filterwarnings("ignore", module="bottle")
+        try:
+            import webmaint
+        except ImportError:
+            warnings.warn("Cannot run first_test without webmaint")
+            ret = None
+        else:
+            ret =  webmaint.get_auth_dbwriter()
+    yield ret
 
 def test_store_objects(dbwriter_auth):
     """Make three objects, store them, and see if we can get them back."""
     if DVS_SERVER==False:
         warnings.warn("DVS Server not available")
-        yield None
+        return
     warnings.filterwarnings("ignore", module="pymysql.cursors")
     warnings.filterwarnings("ignore", module="bottle")
     obj1 = {MESSAGE:time.asctime()}
@@ -69,7 +70,7 @@ def test_store_commit(dbwriter_auth):
     """Store a file update for a single file in the database"""
     if DVS_SERVER==False:
         warnings.warn("DVS Server not available")
-        yield None
+        return
     warnings.filterwarnings("ignore", module="pymysql.cursors")
     warnings.filterwarnings("ignore", module="bottle")
     if dbwriter_auth is None:

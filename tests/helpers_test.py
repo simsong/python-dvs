@@ -15,9 +15,12 @@ Test programs for the installed dvsserver.
 from os.path import dirname,abspath
 sys.path.append( dirname(dirname(abspath(__file__))))
 import dvs
+from dvs.dvs_helpers import *
 
 
-from dvs_helpers import *
+# add the local directory to the path so that we can run this from python or from py.test
+# from the current directory or the parent director
+# sys.path.append( dirname( __file__ ))
 
 
 

@@ -12,21 +12,18 @@ import json
 import warnings
 import time
 
-# Get 'ctools' into the path
+###
+# Get 'ctools' into the path.
+# This assumes a layout on the DAS dashboard.
 sys.path.append( os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-# Until this is properly packaged, just put . into the path
-sys.path.append( os.path.dirname(__file__ ))
-
-
 from ctools import dbfile
 from ctools import tydoc
-import webmaint
+#
+###
+
 
 from dvs_constants import *
 import dvs_helpers
-
-
 
 ###
 ### v2 object-based API
@@ -303,8 +300,10 @@ def dump_api(auth):
 
 
 def search_html(auth):
-    """User interface for searching"""
+    """User interface for searching. This is only run on the DAS dashboard"""
     import bottle
+    import webmaint
+
     (doc,main) = webmaint.get_doc()
     grid = webmaint.apply_das_template(doc,title=f'DVS Search')
     grid.add_tag_text('p','Search:')

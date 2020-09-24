@@ -1,3 +1,10 @@
+"""
+Constants used by the DVS system.
+This is still under active design and development. We try to make this understandable.
+The goal here is to avoid having quoted constants in the source code
+"""
+
+
 HTTP_OK=200
 
 AWS_METADATA_HASHES='uscb-object-hashes'    # json of a citionary of hashes
@@ -9,7 +16,7 @@ ID='id'
 FILE_METADATA='metadata'
 FILE_HASHES='hashes'
 ETAG='etag'
-ST_MTIME='st_mtime'             # mtime as time_t 
+ST_MTIME='st_mtime'             # mtime as time_t
 ST_MTIME_NS='st_mtime_ns'       # mtime as time_t * 10E9
 ST_ATIME='st_atime'
 ST_CTIME='st_ctime'
@@ -29,9 +36,10 @@ BEFORE='before'                 # commit: list of hashes before the commit
 
 # Commit
 COMMIT='commit'                 # commit endpoint
-AFTER='after'                   # commit: list of hashes after the commit
-MESSAGE='message'               # commit: message with the commit
-METHOD='method'                 # commit: list of hashes for programs that produced the commit
+COMMIT_BEFORE='before'                 # commit: list of hashes before the commit
+COMMIT_AFTER='after'                   # commit: list of hashes after the commit
+COMMIT_MESSAGE='message'               # commit: message with the commit
+COMMIT_METHOD='method'                 # commit: list of hashes for programs that produced the commit
 METADATA_MTIME='metadata_mtime'
 DIRNAME='dirname'
 FILENAME='filename'
