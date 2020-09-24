@@ -7,7 +7,7 @@ import sys
 import os
 import subprocess
 
-from helpers import *
+from dvs_helpers import *
 
 def do_s3(s3args):
     if s3args[0]=='cp' and not s3args[1].startswith('s3://') and s3args[2].startswith('s3://'):

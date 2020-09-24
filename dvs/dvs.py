@@ -29,7 +29,7 @@ import ctools.s3
 from ctools import clogging
 
 from dvs_constants import *
-from helpers import *
+from dvs_helpers import *
 
 #urllib3.disable_warnings()
 
@@ -53,7 +53,7 @@ def set_debug_endpoints(prefix):
 def do_commit_send(commit,file_obj_dict):
     """Continue to build the commit.
     @param commit - a dictionary with the base fields.
-    @param file_objec_dict - A dictionary with optional BEFORE, METHOD, and AFTER objects, 
+    @param file_objec_dict - A dictionary with optional BEFORE, METHOD, and AFTER objects,
                  which will be seralized and stored as part of the transaction.
     """
 
@@ -77,7 +77,7 @@ def do_commit_send(commit,file_obj_dict):
     ### DEBUG CODE END
 
     # Send the objects and the commit
-    r = requests.post(ENDPOINTS[COMMIT], 
+    r = requests.post(ENDPOINTS[COMMIT],
                       data={'objects':canonical_json(all_objects),
                             'commit':canonical_json(commit)},
                       verify=VERIFY)
@@ -87,14 +87,14 @@ def do_commit_send(commit,file_obj_dict):
 
     # Return the commit object
     return r.json()
-        
+
 
 def get_s3file_observation_with_hash(path:str):
-    """Given an S3 path, 
-    1. Get the metadata from AWS for the object. 
+    """Given an S3 path,
+    1. Get the metadata from AWS for the object.
     2. Given this metadata, see if there is metadata on the Object server that matches.
     3. If there is, use the hash that is already on the object server.
-    4. If not, download the S3 file and hash it. 
+    4. If not, download the S3 file and hash it.
     5. Return an observation"""
     assert isinstance(path, str)
     s3 = boto3.resource('s3')
@@ -141,7 +141,7 @@ def get_s3file_observation_with_hash(path:str):
             FILE_HASHES: metadata_hashes,
             FILE_METADATA: {ST_SIZE: str(s3_object.content_length),
                             ST_MTIME: str(int(time.mktime(s3_object.last_modified.timetuple()))) }}
-    
+
 
 def get_file_observations_with_remote_cache(paths:list):
     """Create a list of file observations for a list of paths.
@@ -155,7 +155,7 @@ def get_file_observations_with_remote_cache(paths:list):
     assert all([isinstance(path,str) for path in paths])
     logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
     hostname = socket.gethostname()
-    search_dicts = {ct : 
+    search_dicts = {ct :
                     { PATH: os.path.abspath(path),
                       DIRNAME: os.path.dirname(os.path.abspath(path)),
                       FILENAME: os.path.basename(path),
@@ -166,18 +166,18 @@ def get_file_observations_with_remote_cache(paths:list):
 
     # Now we want to send all of the objects to the server as a list
     logging.debug("Search send: %s",str(search_dicts))
-    r = requests.post(ENDPOINTS[SEARCH], 
-                      data={'searches':json.dumps(list(search_dicts.values()), default=str)}, 
+    r = requests.post(ENDPOINTS[SEARCH],
+                      data={'searches':json.dumps(list(search_dicts.values()), default=str)},
                       verify=VERIFY)
     if r.status_code!=HTTP_OK:
         raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
-        
+
     try:
         results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in r.json()}
     except json.decoder.JSONDecodeError as e:
         print("Invalid response from server for search request: ",r,file=sys.stderr)
         raise RuntimeError
-        
+
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
     file_objs = []
     for (search_id,search) in search_dicts.items():
@@ -236,7 +236,7 @@ def do_commit_s3_files(commit, paths):
     s3 = boto3.resource('s3')
     for path in paths:
         file_objs.append( get_s3file_observation_with_hash(path) )
-            
+
     return do_commit_send(commit,{BEFORE:file_objs})
 
 
@@ -253,14 +253,14 @@ def do_commit(commit, paths):
     else:
         raise RuntimeError("All files to be registered must be local or on s3://")
 
-    
+
 def do_dump(limit, offset):
     dump = {}
     if limit is not None:
         dump[LIMIT] = limit
     if offset is not None:
         dump[OFFSET] = offset
-        
+
     data = {'dump':json.dumps(dump, default=str)}
     r = requests.post(ENDPOINTS[DUMP],data=data,verify=VERIFY)
     if r.status_code==HTTP_OK:
@@ -270,21 +270,21 @@ def do_dump(limit, offset):
 
 def do_search(paths, debug=False):
     """Ask the server to do a broad search for a string. Return the results."""
-    search_list = [{SEARCH_ANY: path, 
+    search_list = [{SEARCH_ANY: path,
                     FILENAME: os.path.basename(path) } for path in paths]
     data = {'searches':json.dumps(search_list, default=str)}
     if debug:
         data['debug'] = 'True'
         print("ENDPOINT: ",ENDPOINTS[SEARCH],file=sys.stderr)
         print("DATA: ",json.dumps(data,indent=4),file=sys.stderr)
-    r = requests.post(ENDPOINTS[SEARCH], 
-                      data=data, 
+    r = requests.post(ENDPOINTS[SEARCH],
+                      data=data,
                       verify=VERIFY)
     logging.debug("status=%s text: %s",r.status_code, r.text)
     if r.status_code==HTTP_OK:
         return r.json()
     raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
-    
+
 
 def render_search(obj):
     if len(obj[RESULTS])==0:
@@ -328,7 +328,7 @@ def do_cp(commit,src_path,dst_path):
             dst_path = os.path.join(dst_path, os.path.basename(src_path))
         if os.path.exists(dst_path):
             raise FileExistsError(dst_path)
-    
+
     method_obj = get_file_observation_with_hash(__file__)
     if use_s3:
         cmd = ['aws','s3','cp',src_path,dst_path]
@@ -346,8 +346,8 @@ def do_cp(commit,src_path,dst_path):
                                   METHOD:[method_obj],
                                   AFTER:dst_objs})
 
-                                  
-    
+
+
 
 if __name__ == "__main__":
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
