@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 """
-dvsserver
+dvs server:
+Functions that support the server.
 
 """
 
