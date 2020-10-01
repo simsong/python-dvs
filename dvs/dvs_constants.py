@@ -61,6 +61,10 @@ TIME='time'                     # commit - when method was finished
 DURATION='duration'             # commit - how long the commit took (so we don't have a clock skew issue)
 
 
+# Commit API
+API_OBJECTS='objects'
+API_COMMIT='commit'
+
 
 # Dump
 DUMP='dump'
