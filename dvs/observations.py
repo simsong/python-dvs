@@ -35,7 +35,7 @@ def get_bucket_key(loc):
     assert ValueError("{} is not an s3 location".format(loc))
 
 
-def get_s3file_observation_with_hash(path:str):
+def get_s3file_observation_with_hash(path:str, update_metadata=True):
     """Given an S3 path,
     1. Get the metadata from AWS for the object.
     2. Given this metadata, see if there is metadata on the Object server that matches.
@@ -62,17 +62,20 @@ def get_s3file_observation_with_hash(path:str):
         # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
         # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
 
-        hashes = hash_filehandle(s3_object.get()['Body'])
+        s3obj = s3_object.get()
+        print("Hashing {:,} bytes...".format(s3obj['ContentLength']),file=sys.stderr)
+        hashes = hash_filehandle(s3obj['Body'])
         st_size  = s3_object.content_length
 
-        # Update the object metadata
-        # https://stackoverflow.com/questions/39596987/how-to-update-metadata-of-an-existing-object-in-aws-s3-using-python-boto3
-        new_metadata = {AWS_METADATA_HASHES:json.dumps(hashes,default=str),
-                        AWS_METADATA_ST_SIZE: str(st_size)}
+        if update_metadata:
+            # Update the object metadata
+            # https://stackoverflow.com/questions/39596987/how-to-update-metadata-of-an-existing-object-in-aws-s3-using-python-boto3
+            new_metadata = {AWS_METADATA_HASHES:json.dumps(hashes,default=str),
+                            AWS_METADATA_ST_SIZE: str(st_size)}
 
-        s3_object.metadata.update(new_metadata)
-        s3_object.copy_from(CopySource={'Bucket':bucket,'Key':key}, Metadata=s3_object.metadata, MetadataDirective='REPLACE')
-        s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guarenteed
+            s3_object.metadata.update(new_metadata)
+            s3_object.copy_from(CopySource={'Bucket':bucket,'Key':key}, Metadata=s3_object.metadata, MetadataDirective='REPLACE')
+            s3_object = s3.Object(bucket,key) # hopefully get the new object with the new mod time, but not guaranteed
         metadata_hashes = hashes          # don't bother to read it again
         metadata_st_size = st_size
     assert isinstance(metadata_hashes,dict)

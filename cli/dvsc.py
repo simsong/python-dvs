@@ -39,9 +39,21 @@ except ModuleNotFoundError:
     sys.path.append(dirname(dirname(abspath(__file__))))
     import dvs
 
+################################################################
+###
+### metadata plugins are functions that take a file descriptor and return a dictionary of name: value pairs
+###
+# for now, just import the metata plugins
+sys.path.append(dirname(abspath(__file__)))
+from plugins.metadata_das_header import metadata_das_header as plug1
+
+plugins = [plug1]
+################################################################
+
+
 from dvs.dvs_constants import *
 from dvs.dvs_helpers  import *
-from dvs.observations import get_s3file_observation_with_hash,get_file_observations_with_remote_cache
+from dvs.observations import get_s3file_observation_with_hash,get_file_observations_with_remote_cache,get_bucket_key
 
 VERIFY=False
 if VERIFY==False:
@@ -68,27 +80,34 @@ def do_commit_local_files(commit, paths):
     return d.commit()
 
 
-def do_commit_s3_files(commit, paths):
+def do_commit_s3_files(commit, paths, update_metadata=True):
     """Get the metadata for each s3 object.
     Then do a search and ask the sever if it knows for an object with this etag.
     If the backend knows about this etag, then we don't need to hash again.
     This could be made more efficient by doing the multiple S3 actions in parallel.
     """
+    s3 = boto3.resource('s3')
     d = dvs.DVS( base=commit)
     for path in paths:
-        d.add_s3path(BEFORE, path)
+        (bucket,key) = get_bucket_key(path)
+        first64k = s3.Object(bucket,key).get()['Body'].read(65536)
+        # get the s3 metadata
+        extra = {}
+        for plugin in plugins:
+            extra = {**extra, **plugin(first64k)}
+        d.add_s3path(BEFORE, path, extra=extra, update_metadata=update_metadata)
     return d.commit( )
 
-def do_commit(commit, paths):
+def do_commit(commit, paths, update_metadata=True):
     """Given a commit and a set of paths, figure out if they are local files or s3 files, add each, and process.
     TODO: Make this work with both S3 and local files?
     """
     # Make sure all files are either local or s3
     s3count = sum([1 if path.startswith("s3://") else 0 for path in paths])
     if s3count==0:
-        return do_commit_local_files(commit,paths)
+        return do_commit_local_files(commit, paths)
     elif s3count==len(paths):
-        return do_commit_s3_files(commit,paths)
+        return do_commit_s3_files(commit, paths, update_metadata=update_metadata)
     else:
         raise RuntimeError("All files to be registered must be local or on s3://")
 
@@ -195,6 +214,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", help="Specifies the name of a dataset when registering a file")
     parser.add_argument("--debug", action='store_true')
     parser.add_argument("--garfi303", action='store_true')
+    parser.add_argument("--noupdate",     help="Do not update metadata on s3", action='store_true')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--search",   "-s", help="Search for information about the path", action='store_true')
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
@@ -223,7 +243,7 @@ if __name__ == "__main__":
         for search in do_search(args.path, debug=args.debug):
             render_search(search)
     elif args.register or args.commit:
-        print_commit( do_commit(commit, args.path))
+        print_commit( do_commit(commit, args.path, update_metadata=not args.noupdate))
     elif args.dump:
         limit  = int(args.path[0]) if len(args.path)>0 else None
         offset = int(args.path[1]) if len(args.path)>1 else None

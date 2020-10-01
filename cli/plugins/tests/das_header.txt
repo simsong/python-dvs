@@ -1,0 +1,43 @@
+# combined Thu Oct  1 11:32:39 2020
+# input1: s3://bucket1/dir1/path1/file1.txt  prefix: F1
+# input2: s3://bucket1/dir1/path1/file2.txt  prefix: F2
+# records: 9 (combined)
+#
+# US Classification: F - F is for Fun!
+# US Created: 2020-10-01T03:10:19.836911
+# US Records: 5
+# US Command line: /usr/bin/python36 /mnt/users/gandalf/demo.py
+# US uid: 498
+# US username: hadoop
+# US Boot Time: 2020-09-30T10:05:20
+# US Start Time: 2020-09-30T19:46:19.331803
+# US Git Repo Info:dvs commit ccb26576a3b32f5526e6d50a174f03e5b7650d0f|ami-hardening-linux commit 1e5ee5a07feaf3152ab1deb3e3368e471cdc0b62|emr-hardening-amazon-linux commit 5f1e520819af47730813bce544af248cc15836bf|stackConfig commit 8eb3e666e58286786f6692d5a1ecad0b3270342f|das_decennial commit e7b2a6d3502216543b48be5570110f087792725f|das_framework commit d868ab331f3813f26b6c1a359a5a47cf1f1dd9c3|ctools commit 49a3737b3a81658913862b5a5748709701e0a4af|dfxml commit 3ae80ec9b3cdd1483420423d31d6fa6523a96743|python_dvs commit e7b2a6d3502216543b48be5570110f087792725f|etl_2020 commit aa9705e23f12a7c87e03499d1375f4df174be936|census_etl commit 84772e21cb147c9d3a2cfb5812c4a6c088cfc700|safetab-2020 commit 23ac983e1fe47f1d7aa6f17e63afa0b101f718b0|das-vm-config commit 8f9373c9e70bf2807c783a7f0bfbca38ec98e3db (untracked files present at run time)
+# US os_sysname: Linux
+# US host: ip-10-252-47-14
+# US os_release: 4.14.128-87.105.amzn1.x86_64
+# US os_version: #1 SMP Thu Jun 20 00:43:44 UTC 2019
+# US arch: x86_64
+#
+# PR Classification: F - F is for Fun!
+# PR Created: 2020-10-01T11:09:41.853759
+# PR Records: 4
+# PR Command line: /usr/bin/python36 /mnt/users/heine008/repos/20200930-bug-fixed/das-vm-config/das_decennial/das2020_driver.py configs/production/pl94/person_PR.ini --loglevel DEBUG --logfilename logs/DAS-2020-10-01_0653_SPIRALED_OPPORTUNITY.log
+# PR uid: 498
+# PR username: hadoop
+# PR Boot Time: 2020-09-30T10:05:20
+# PR Start Time: 2020-10-01T10:53:30.987307
+# PR Git Repo Info:dvs commit ccb26576a3b32f5526e6d50a174f03e5b7650d0f|ami-hardening-linux commit 1e5ee5a07feaf3152ab1deb3e3368e471cdc0b62|emr-hardening-amazon-linux commit 5f1e520819af47730813bce544af248cc15836bf|stackConfig commit 8eb3e666e58286786f6692d5a1ecad0b3270342f|das_decennial commit 68b96e4aa473304fa9e625633c1760063d787471|das_framework commit d868ab331f3813f26b6c1a359a5a47cf1f1dd9c3|ctools commit 49a3737b3a81658913862b5a5748709701e0a4af|dfxml commit 3ae80ec9b3cdd1483420423d31d6fa6523a96743|python_dvs commit 47049e346f29484a2605e9304dc0efb78af508bb|etl_2020 commit aa9705e23f12a7c87e03499d1375f4df174be936|census_etl commit 84772e21cb147c9d3a2cfb5812c4a6c088cfc700|safetab-2020 commit 23ac983e1fe47f1d7aa6f17e63afa0b101f718b0|das-vm-config commit 4192948b1b26a40dbc062743eb407113742f5fab (modifications from commit present at run time)
+# PR os_sysname: Linux
+# PR host: ip-10-252-47-14
+# PR os_release: 4.14.128-87.105.amzn1.x86_64
+# PR os_version: #1 SMP Thu Jun 20 00:43:44 UTC 2019
+# PR arch: x86_64
+1|April 30, 1789|George Washington
+2|March 4, 1797|John Adams
+3|March 4, 1801|Thomas Jefferson
+4|March 4, 1809|James Madison
+5|March 4, 1817|James Monroe
+6|March 4, 1825|John Quincy Adams
+7|March 4, 1829|Andrew jackson
+8|March 4, 1837|Martin Van Buren
+9|March 4, 1841|William Henry Harrison

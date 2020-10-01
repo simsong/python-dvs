@@ -31,17 +31,28 @@ class DVS():
         self.file_obj_dict[which].append(obj)
 
 
-    def add_s3path(self, which, s3path):
-        """Add an s3 object, possibly hashing it"""
+    def add_s3path(self, which, s3path, extra={}, update_metadata=True):
+        """Add an s3 object, possibly hashing it.
+        :param which: should be COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
+        :param s3path: an S3 path (e.g. s3://bucket/path) of the object to add
+        :param extra:   additional key:value pairs to be added to the object
+        """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        observation = get_s3file_observation_with_hash( s3path)
-        self.add( which, obj = observation)
+        obj = get_s3file_observation_with_hash( s3path, update_metadata=update_metadata)
+        if extra:
+            assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
+            obj = {**obj, **extra}
+
+        self.add( which, obj = obj)
 
 
-    def add_local_paths(self, which, paths):
+    def add_local_paths(self, which, paths, extra={}):
         """Add multiple paths using remote cache"""
         file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.endpoints[SEARCH])
         for obj in file_objs:
+            if extra:
+                assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
+                obj = {**obj, **extra}
             self.add( which, obj=obj)
 
 
