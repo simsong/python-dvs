@@ -37,6 +37,14 @@ class DVS():
         observation = get_s3file_observation_with_hash( s3path)
         self.add( which, obj = observation)
 
+
+    def add_local_paths(self, which, paths):
+        """Add multiple paths using remote cache"""
+        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.endpoints[SEARCH])
+        for obj in file_objs:
+            self.add( which, obj=obj)
+
+
     def add_before(self, *, obj):
         return self.add(COMMIT_BEFORE, obj=obj)
 

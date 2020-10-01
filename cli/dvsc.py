@@ -63,8 +63,9 @@ def do_commit_local_files(commit, paths):
     3. Send to the server a list of all of the files as a commit.
     TODO: plug-in additional hash attributes.
     """
-    file_objs = get_file_observations_with_remote_cache(paths,search_endpoint=ENDPOINTS[SEARCH])
-    return do_commit_send(commit,{BEFORE:file_objs})
+    d = dvs.DVS( base=commit)
+    d.add_local_paths( BEFORE, paths)
+    return d.commit()
 
 
 def do_commit_s3_files(commit, paths):
@@ -146,6 +147,7 @@ def print_commit(commit):
     print("COMMIT:")
     print(json.dumps(commit,indent=4,default=str,sort_keys=True))
 
+
 def do_cp(commit,src_path,dst_path):
     """Implement a file copy, with the fact of the copy recorded in the DVS"""
 
@@ -212,10 +214,10 @@ if __name__ == "__main__":
 
     commit = {}
     if args.message:
-        commit[MESSAGE]= args.message
-        commit[AUTHOR] = os.getenv('USER')
+        commit[COMMIT_MESSAGE]= args.message
+        commit[COMMIT_AUTHOR] = os.getenv('USER')
     if args.dataset:
-        commit[DATASET] = dataset
+        commit[COMMIT_DATASET] = dataset
 
     if args.search:
         for search in do_search(args.path, debug=args.debug):
