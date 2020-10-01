@@ -20,22 +20,28 @@ debug with:
 python dvs.py --garfi303 --debug -m test$$ --register tests/dvs_demo.txt --loglevel DEBUG
 """
 
-### bring in ctools
+### bring in ctools if we can find it
 from os.path import dirname, abspath, basename
-POSSIBLE_DAS_DECENNIAL=dirname(dirname(dirname(abspath(__file__))))
+POSSIBLE_DAS_DECENNIAL=dirname(dirname(dirname(dirname(abspath(__file__)))))
 if basename(POSSIBLE_DAS_DECENNIAL)=='das_decennial':
     sys.path.append(os.path.join(POSSIBLE_DAS_DECENNIAL,'das_framework'))
-from ctools import clogging
+try:
+    import ctools.clogging
+except ModuleNotFoundError:
+    ctools = None
 ###
 
+
+# import the dvs module
+try:
+    import dvs
+except ModuleNotFoundError:
+    sys.path.append(dirname(dirname(abspath(__file__))))
+    import dvs
 
 from dvs.dvs_constants import *
 from dvs.dvs_helpers  import *
 from dvs.observations import get_s3file_observation_with_hash,get_file_observations_with_remote_cache
-
-ENDPOINTS = {SEARCH:"https://dasexperimental.ite.ti.census.gov/api/dvs/search",
-             COMMIT:"https://dasexperimental.ite.ti.census.gov/api/dvs/commit",
-             DUMP:"https://dasexperimental.ite.ti.census.gov/api/dvs/dump" }
 
 VERIFY=False
 if VERIFY==False:
@@ -46,45 +52,6 @@ def set_debug_endpoints(prefix):
     """If called, changes the endpoints to be the debug endpoints"""
     for e in ENDPOINTS:
         ENDPOINTS[e] = ENDPOINTS[e].replace("census.gov/api",f"census.gov/{prefix}/api")
-
-
-def do_commit_send(commit,file_obj_dict):
-    """Continue to build the commit.
-    @param commit - a dictionary with the base fields.
-    @param file_objec_dict - A dictionary with optional BEFORE, METHOD, and AFTER objects,
-                 which will be seralized and stored as part of the transaction.
-    """
-
-    assert isinstance(commit,dict)
-    assert isinstance(file_obj_dict,dict)
-    # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON
-    all_objects = {}
-    # grab the BEFORE, METHOD, and AFTER object lists.
-    for (which,file_objs) in file_obj_dict.items():
-        assert isinstance(file_objs,list)
-        assert all([isinstance(obj,dict) for obj in file_objs])
-        objects       = objects_dict(file_objs)
-        commit[which] = list(objects.keys())
-        all_objects   = {**all_objects, **objects}
-
-    ### DEBUG CODE START
-    logging.debug("# of objects to upload: %d",len(file_objs))
-    for (ct,obj) in enumerate(file_objs,1):
-        logging.debug("object %d: %s",ct,obj)
-    logging.debug("commit: %s",json.dumps(commit,default=str,indent=4))
-    ### DEBUG CODE END
-
-    # Send the objects and the commit
-    r = requests.post(ENDPOINTS[COMMIT],
-                      data={'objects':canonical_json(all_objects),
-                            'commit':canonical_json(commit)},
-                      verify=VERIFY)
-    logging.debug("response: %s",r)
-    if r.status_code!=HTTP_OK:
-        raise RuntimeError(f"Error from server: {r.status_code}: {r.text}")
-
-    # Return the commit object
-    return r.json()
 
 
 def do_commit_local_files(commit, paths):
@@ -106,14 +73,10 @@ def do_commit_s3_files(commit, paths):
     If the backend knows about this etag, then we don't need to hash again.
     This could be made more efficient by doing the multiple S3 actions in parallel.
     """
-    file_objs = []
-    s3_objects = {}
-    s3 = boto3.resource('s3')
+    d = dvs.DVS( base=commit)
     for path in paths:
-        file_objs.append( get_s3file_observation_with_hash(path) )
-
-    return do_commit_send(commit,{BEFORE:file_objs})
-
+        d.add_s3path(BEFORE, path)
+    return d.commit( )
 
 def do_commit(commit, paths):
     """Given a commit and a set of paths, figure out if they are local files or s3 files, add each, and process.
@@ -236,11 +199,13 @@ if __name__ == "__main__":
     group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
     group.add_argument("--dump",           help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
     group.add_argument("--cp",             help="Copy file1 to file2 and log in DVS. Also works for S3 files", action='store_true')
-    clogging.add_argument(parser,loglevel_default='WARNING')
+    if ctools is not None:
+        ctools.clogging.add_argument(parser,loglevel_default='WARNING')
     args = parser.parse_args()
     if args.debug:
         args.loglevel='DEBUG'
-    clogging.setup(args.loglevel)
+    if ctools is not None:
+        ctools.clogging.setup(args.loglevel)
 
     if args.garfi303:
         set_debug_endpoints("~garfi303adm/html")
