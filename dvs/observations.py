@@ -50,6 +50,11 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
     (bucket,key)           = get_bucket_key(path)
     s3obj     = boto3.resource( AWS_S3 ).Object( bucket, key)
 
+    # Annoying, S3 ETags come with quotes, which we will now remove
+    etag      = s3obj.e_tag
+    if etag[0] == '"':
+        etag = s3obj.e_tag[1:-1]
+
     # Create the search
     search_dicts = {1 :
                     { HOSTNAME:DVS_S3_PREFIX + bucket,
@@ -57,7 +62,7 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
                       FILENAME: os.path.basename(key),
                       FILE_METADATA: {ST_SIZE  : s3obj.content_length,
                                       ST_MTIME : int(s3obj.last_modified.timestamp()),
-                                      ETAG     : s3obj.e_tag},
+                                      ETAG     : etag},
                       ID: 1
                   }}
 
@@ -120,7 +125,7 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
            FILENAME: os.path.basename(key),
            FILE_METADATA: {ST_SIZE  : s3obj.content_length,
                            ST_MTIME : int(s3obj.last_modified.timestamp()),
-                           ETAG     : s3obj.e_tag},
+                           ETAG     : etag},
            FILE_HASHES: hashes}
     return obj
 

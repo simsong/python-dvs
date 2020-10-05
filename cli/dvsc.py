@@ -51,6 +51,7 @@ plugins = [plug1]
 ################################################################
 
 
+from dvs import ENDPOINTS
 from dvs.dvs_constants import *
 from dvs.dvs_helpers  import *
 from dvs.observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
