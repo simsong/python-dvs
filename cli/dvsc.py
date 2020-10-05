@@ -81,25 +81,43 @@ def do_commit_local_files(commit, paths):
     return d.commit()
 
 
-def do_commit_s3_files(commit, paths, update_metadata=True):
+def do_commit_s3_files(commit, paths):
     """Get the metadata for each s3 object.
     Then do a search and ask the sever if it knows for an object with this etag.
     If the backend knows about this etag, then we don't need to hash again.
     This could be made more efficient by doing the multiple S3 actions in parallel.
+
+    Moving forward: this should be parallelized.
     """
-    s3 = boto3.resource('s3')
+    # See https://stackoverflow.com/questions/42809096/difference-in-boto3-between-resource-client-and-session
+    # for difference between s3 client and resource.
+    # the client is the low-level API that provides all of the access.
+    # The 'resource' is a higher-level object-oriented API.
+
+    s3_client = boto3.client('s3')
+
     d = dvs.DVS( base=commit)
     for path in paths:
         (bucket,key) = get_bucket_key(path)
-        first64k = s3.Object(bucket,key).get()['Body'].read(65536)
-        # get the s3 metadata
-        extra = {}
-        for plugin in plugins:
-            extra = {**extra, **plugin(first64k)}
-        d.add_s3path(BEFORE, path, extra=extra, update_metadata=update_metadata)
+        if key.endswith('/'):
+            objs = s3_client.list_objects_v2(Bucket=bucket, Prefix=key, MaxKeys=1000)
+            keys = [r['Key'] for r in objs['Contents']]
+        else:
+            keys = [key]
+        for k in keys:
+            # Previously I was doing stuff with the first 64k.
+            # But now, just do it right and optimzie it later.
+            # first64k = s3.Object(bucket,k).get()['Body'].read(65536)
+            # get the s3 metadata
+            # extra = {}
+            # for plugin in plugins:
+            # extra = {**extra, **plugin(first64k)}
+            # d.add_s3path(BEFORE, path, extra=extra)
+            path = 's3://' + bucket + '/' + k
+            d.add_s3path( BEFORE,  path )
     return d.commit( )
 
-def do_commit(commit, paths, update_metadata=True):
+def do_commit(commit, paths):
     """Given a commit and a set of paths, figure out if they are local files or s3 files, add each, and process.
     TODO: Make this work with both S3 and local files?
     """
@@ -108,7 +126,7 @@ def do_commit(commit, paths, update_metadata=True):
     if s3count==0:
         return do_commit_local_files(commit, paths)
     elif s3count==len(paths):
-        return do_commit_s3_files(commit, paths, update_metadata=update_metadata)
+        return do_commit_s3_files(commit, paths)
     else:
         raise RuntimeError("All files to be registered must be local or on s3://")
 
@@ -215,7 +233,6 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", help="Specifies the name of a dataset when registering a file")
     parser.add_argument("--debug", action='store_true')
     parser.add_argument("--garfi303", action='store_true')
-    parser.add_argument("--noupdate",     help="Do not update metadata on s3", action='store_true')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--search",   "-s", help="Search for information about the path", action='store_true')
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
@@ -244,7 +261,7 @@ if __name__ == "__main__":
         for search in do_search(args.path, debug=args.debug):
             render_search(search)
     elif args.register or args.commit:
-        print_commit( do_commit(commit, args.path, update_metadata=not args.noupdate))
+        print_commit( do_commit(commit, args.path))
     elif args.dump:
         limit  = int(args.path[0]) if len(args.path)>0 else None
         offset = int(args.path[1]) if len(args.path)>1 else None

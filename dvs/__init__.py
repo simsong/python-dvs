@@ -31,7 +31,7 @@ class DVS():
         self.file_obj_dict[which].append(obj)
 
 
-    def add_s3path(self, which, s3path, extra={}, update_metadata=True):
+    def add_s3path(self, which, s3path, extra={}):
         """Add an s3 object, possibly hashing it.
         :param which: should be COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
         :param s3path: an S3 path (e.g. s3://bucket/path) of the object to add

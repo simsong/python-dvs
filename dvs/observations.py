@@ -118,7 +118,7 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
     # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
 
-    print("S3 Hashing {:,} bytes...".format(s3obj.content_length),file=sys.stderr)
+    print("S3 Hashing s3://{}/{} {:,} bytes...".format(bucket,key,s3obj.content_length),file=sys.stderr)
     hashes = hash_filehandle(s3obj.get()['Body'])
     obj = {HOSTNAME: DVS_S3_PREFIX + bucket,
            DIRNAME:  os.path.dirname(key),
