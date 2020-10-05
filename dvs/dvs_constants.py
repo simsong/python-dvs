@@ -7,9 +7,18 @@ The goal here is to avoid having quoted constants in the source code
 
 HTTP_OK=200
 
-AWS_METADATA_HASHES='uscb-object-hashes'    # json of a citionary of hashes
-AWS_METADATA_ST_MTIME='uscb-object-st_mtime' # the time on the file
-AWS_METADATA_ST_SIZE='uscb-object-st_size' # the size of the object
+DVS_S3_PREFIX='s3://'
+
+# https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonResponseHeaders.html
+AWS_S3='s3'
+AWS_HEADER_CONTENT_LENGTH="Content-Length"
+AWS_HEADER_CONTENT_TYPE="Content-Type"
+AWS_HEADER_CONNECTIOn="Connection"
+AWS_HEADER_DATE="Date"
+AWS_HEADER_ETAG="Etag"
+AWS_HEADER_SERVER="Server"
+
+
 ID='id'
 
 # File objects

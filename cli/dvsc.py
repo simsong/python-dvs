@@ -53,7 +53,7 @@ plugins = [plug1]
 
 from dvs.dvs_constants import *
 from dvs.dvs_helpers  import *
-from dvs.observations import get_s3file_observation_with_hash,get_file_observations_with_remote_cache,get_bucket_key
+from dvs.observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
 
 VERIFY=False
 if VERIFY==False:
@@ -174,7 +174,7 @@ def do_cp(commit,src_path,dst_path):
     t0 = time.time()
     if src_path.startswith("s3://"):
         use_s3  = True
-        src_objs = [get_s3file_observation_with_hash(src_path)]
+        src_objs = [get_s3file_observation_with_remote_cache(src_path, search_endpoint=ENDPOINTS[SEARCH])]
     else:
         src_objs = get_file_observations_with_remote_cache([src_path],search_endpoint=ENDPOINTS[SEARCH])
 

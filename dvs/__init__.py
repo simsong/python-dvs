@@ -7,7 +7,7 @@ import requests
 
 from .dvs_constants import *
 from .dvs_helpers import objects_dict,canonical_json
-from .observations import get_s3file_observation_with_hash,get_file_observations_with_remote_cache
+from .observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache
 
 ENDPOINTS = {SEARCH:"https://dasexperimental.ite.ti.census.gov/api/dvs/search",
              COMMIT:"https://dasexperimental.ite.ti.census.gov/api/dvs/commit",
@@ -38,7 +38,7 @@ class DVS():
         :param extra:   additional key:value pairs to be added to the object
         """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        obj = get_s3file_observation_with_hash( s3path, update_metadata=update_metadata)
+        obj = get_s3file_observation_with_remote_cache( s3path, search_endpoint=self.endpoints[SEARCH])
         if extra:
             assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
             obj = {**obj, **extra}
