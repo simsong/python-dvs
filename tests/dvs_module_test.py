@@ -16,14 +16,15 @@ Test the dvs module
 from os.path import dirname, abspath, basename
 sys.path.append( dirname(dirname( abspath( __file__ ) )))
 import dvs
+from dvs.dvs_constants import COMMIT_BEFORE,COMMIT_METHOD,COMMIT_AFTER
 
 
 def test_simple_commit():
     dc = dvs.DVS()
     with tempfile.NamedTemporaryFile(mode='w') as tf:
         tf.write(time.asctime()) # always different
-        dc.add_before( filename = tf.name )
-        dc.add_method( filename = __file__ )
+        dc.add_local_paths( COMMIT_BEFORE, [tf.name] )
+        dc.add_local_paths( COMMIT_METHOD, [__file__] )
         dc.commit()
 
 
