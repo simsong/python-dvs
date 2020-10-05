@@ -22,7 +22,7 @@ from dvs.dvs_constants import *
 
 
 # Grab the dvs cli functions
-import cli.dvs as dvs_cli
+import cli.dvsc as dvs_cli
 
 # put the local directory in the path so we can import this
 sys.path.append( dirname( __file__ ))

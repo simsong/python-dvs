@@ -39,9 +39,22 @@ except ModuleNotFoundError:
     sys.path.append(dirname(dirname(abspath(__file__))))
     import dvs
 
+################################################################
+###
+### metadata plugins are functions that take a file descriptor and return a dictionary of name: value pairs
+###
+# for now, just import the metata plugins
+sys.path.append(dirname(abspath(__file__)))
+from plugins.metadata_das_header import metadata_das_header as plug1
+
+plugins = [plug1]
+################################################################
+
+
+from dvs import ENDPOINTS
 from dvs.dvs_constants import *
 from dvs.dvs_helpers  import *
-from dvs.observations import get_s3file_observation_with_hash,get_file_observations_with_remote_cache
+from dvs.observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
 
 VERIFY=False
 if VERIFY==False:
@@ -63,8 +76,9 @@ def do_commit_local_files(commit, paths):
     3. Send to the server a list of all of the files as a commit.
     TODO: plug-in additional hash attributes.
     """
-    file_objs = get_file_observations_with_remote_cache(paths,search_endpoint=ENDPOINTS[SEARCH])
-    return do_commit_send(commit,{BEFORE:file_objs})
+    d = dvs.DVS( base=commit)
+    d.add_local_paths( BEFORE, paths)
+    return d.commit()
 
 
 def do_commit_s3_files(commit, paths):
@@ -72,10 +86,35 @@ def do_commit_s3_files(commit, paths):
     Then do a search and ask the sever if it knows for an object with this etag.
     If the backend knows about this etag, then we don't need to hash again.
     This could be made more efficient by doing the multiple S3 actions in parallel.
+
+    Moving forward: this should be parallelized.
     """
+    # See https://stackoverflow.com/questions/42809096/difference-in-boto3-between-resource-client-and-session
+    # for difference between s3 client and resource.
+    # the client is the low-level API that provides all of the access.
+    # The 'resource' is a higher-level object-oriented API.
+
+    s3_client = boto3.client('s3')
+
     d = dvs.DVS( base=commit)
     for path in paths:
-        d.add_s3path(BEFORE, path)
+        (bucket,key) = get_bucket_key(path)
+        if key.endswith('/'):
+            objs = s3_client.list_objects_v2(Bucket=bucket, Prefix=key, MaxKeys=1000)
+            keys = [r['Key'] for r in objs['Contents']]
+        else:
+            keys = [key]
+        for k in keys:
+            # Previously I was doing stuff with the first 64k.
+            # But now, just do it right and optimzie it later.
+            # first64k = s3.Object(bucket,k).get()['Body'].read(65536)
+            # get the s3 metadata
+            # extra = {}
+            # for plugin in plugins:
+            # extra = {**extra, **plugin(first64k)}
+            # d.add_s3path(BEFORE, path, extra=extra)
+            path = 's3://' + bucket + '/' + k
+            d.add_s3path( BEFORE,  path )
     return d.commit( )
 
 def do_commit(commit, paths):
@@ -85,9 +124,9 @@ def do_commit(commit, paths):
     # Make sure all files are either local or s3
     s3count = sum([1 if path.startswith("s3://") else 0 for path in paths])
     if s3count==0:
-        return do_commit_local_files(commit,paths)
+        return do_commit_local_files(commit, paths)
     elif s3count==len(paths):
-        return do_commit_s3_files(commit,paths)
+        return do_commit_s3_files(commit, paths)
     else:
         raise RuntimeError("All files to be registered must be local or on s3://")
 
@@ -146,6 +185,7 @@ def print_commit(commit):
     print("COMMIT:")
     print(json.dumps(commit,indent=4,default=str,sort_keys=True))
 
+
 def do_cp(commit,src_path,dst_path):
     """Implement a file copy, with the fact of the copy recorded in the DVS"""
 
@@ -153,7 +193,7 @@ def do_cp(commit,src_path,dst_path):
     t0 = time.time()
     if src_path.startswith("s3://"):
         use_s3  = True
-        src_objs = [get_s3file_observation_with_hash(src_path)]
+        src_objs = [get_s3file_observation_with_remote_cache(src_path, search_endpoint=ENDPOINTS[SEARCH])]
     else:
         src_objs = get_file_observations_with_remote_cache([src_path],search_endpoint=ENDPOINTS[SEARCH])
 
@@ -212,10 +252,10 @@ if __name__ == "__main__":
 
     commit = {}
     if args.message:
-        commit[MESSAGE]= args.message
-        commit[AUTHOR] = os.getenv('USER')
+        commit[COMMIT_MESSAGE]= args.message
+        commit[COMMIT_AUTHOR] = os.getenv('USER')
     if args.dataset:
-        commit[DATASET] = dataset
+        commit[COMMIT_DATASET] = dataset
 
     if args.search:
         for search in do_search(args.path, debug=args.debug):
