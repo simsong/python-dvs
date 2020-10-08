@@ -93,28 +93,14 @@ def do_commit_s3_files(commit, paths):
     # for difference between s3 client and resource.
     # the client is the low-level API that provides all of the access.
     # The 'resource' is a higher-level object-oriented API.
-
     s3_client = boto3.client('s3')
 
     d = dvs.DVS( base=commit)
     for path in paths:
-        (bucket,key) = get_bucket_key(path)
         if key.endswith('/'):
-            objs = s3_client.list_objects_v2(Bucket=bucket, Prefix=key, MaxKeys=1000)
-            keys = [r['Key'] for r in objs['Contents']]
+            d.add_s3prefix( BEFORE,  path)
         else:
-            keys = [key]
-        for k in keys:
-            # Previously I was doing stuff with the first 64k.
-            # But now, just do it right and optimzie it later.
-            # first64k = s3.Object(bucket,k).get()['Body'].read(65536)
-            # get the s3 metadata
-            # extra = {}
-            # for plugin in plugins:
-            # extra = {**extra, **plugin(first64k)}
-            # d.add_s3path(BEFORE, path, extra=extra)
-            path = 's3://' + bucket + '/' + k
-            d.add_s3path( BEFORE,  path )
+            d.add_s3path( BEFORE, path )
     return d.commit( )
 
 def do_commit(commit, paths):

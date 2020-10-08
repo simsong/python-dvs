@@ -159,7 +159,7 @@ def get_objects(auth,hexhashes):
 
 
 def store_commit(auth,commit):
-    """The commit is an object that has hashes in BEFORE, METHOD, or AFTER
+    """The commit is an object that has hashes in COMMIT_BEFORE, COMMIT_METHOD, or COMMIT_AFTER
 fields. Make sure they are valid hashes and refer to objects in our
 database. If so, add a timestamp, store it in the object store, and
 return the object. It's returned as a list in case we want to be able
@@ -168,7 +168,7 @@ other methods return lists of objects
     """
     assert isinstance(commit, dict)
     hashes = []
-    for check in [BEFORE,METHOD,AFTER]:
+    for check in [COMMIT_BEFORE,COMMIT_METHOD,COMMIT_AFTER]:
         if check in commit:
             objlist = commit[check];
             if not isinstance(objlist, list):

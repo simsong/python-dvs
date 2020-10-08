@@ -17,8 +17,8 @@ import socket
 Routines for getting observations.
 """
 
-from dvs.dvs_constants import *
-from dvs.dvs_helpers  import *
+from .dvs_constants import *
+from .dvs_helpers  import *
 
 def get_bucket_key(loc):
     """Given a location, return the (bucket,key)"""
