@@ -52,8 +52,9 @@ plugins = [plug1]
 
 
 from dvs import ENDPOINTS
-from dvs.dvs_constants import *
-from dvs.dvs_helpers  import *
+from dvs.dvs_constants import COMMIT_BEFORE as BEFORE, COMMIT_AFTER as AFTER, COMMIT_METHOD as METHOD, COMMIT_MESSAGE, COMMIT_AUTHOR, COMMIT_DATASET
+from dvs.dvs_constants import LIMIT, DUMP, OFFSET, HTTP_OK, SEARCH, SEARCH_ANY, FILENAME, RESULTS, FILE_METADATA, ST_MTIME, ST_CTIME, OBJECT, DURATION
+from dvs.dvs_helpers  import get_file_observation_with_hash
 from dvs.observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
 
 VERIFY=False
@@ -93,11 +94,11 @@ def do_commit_s3_files(commit, paths):
     # for difference between s3 client and resource.
     # the client is the low-level API that provides all of the access.
     # The 'resource' is a higher-level object-oriented API.
-    s3_client = boto3.client('s3')
+    s3_client = boto3.client('s3')  # THIS VARIABLE IS NOT USED
 
     d = dvs.DVS( base=commit)
     for path in paths:
-        if key.endswith('/'):
+        if path.endswith('/'):
             d.add_s3prefix( BEFORE,  path)
         else:
             d.add_s3path( BEFORE, path )
@@ -202,7 +203,7 @@ def do_cp(commit,src_path,dst_path):
         shutil.copyfile(src_path,dst_path)
 
     if dst_path.startswith("s3://"):
-        dst_objs = [get_s3file_observation_with_hash(dst_path)]
+        dst_objs = [get_s3file_observation_with_hash(dst_path)]  # TODO: This function doesn't exist, maybe should be _with_remote_cache?
     else:
         dst_objs = get_file_observations_with_remote_cache([dst_path],search_endpoint=ENDPOINTS[SEARCH])
     commit[DURATION] = time.time() - t0
@@ -241,7 +242,7 @@ if __name__ == "__main__":
         commit[COMMIT_MESSAGE]= args.message
         commit[COMMIT_AUTHOR] = os.getenv('USER')
     if args.dataset:
-        commit[COMMIT_DATASET] = dataset
+        commit[COMMIT_DATASET] = args.dataset
 
     if args.search:
         for search in do_search(args.path, debug=args.debug):

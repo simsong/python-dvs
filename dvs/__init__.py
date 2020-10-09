@@ -23,11 +23,11 @@ class DVSGitException(DVSException):
     pass
 
 class DVS():
-    def __init__(self, base={}, endpoints=ENDPOINTS, verify=True, debug=False):
+    def __init__(self, base=None, endpoints=None, verify=True, debug=False):
         """Start a DVS transaction"""
-        self.the_commit    = base
+        self.the_commit    = base if base is not None else {}
         self.file_obj_dict = {} # where the file objects will end up
-        self.endpoints     = endpoints
+        self.endpoints     = endpoints if endpoints is not None else ENDPOINTS
         self.t0            = time.time()
         self.verify        = verify
         self.debug         = debug
@@ -61,7 +61,7 @@ class DVS():
                 GIT_SERVER_URL: url}
         self.add(which, obj=obj)
 
-    def add_s3path(self, which, s3path, *, extra={}):
+    def add_s3path(self, which, s3path, *, extra=None):
         """Add an s3 object, possibly hashing it.
         :param which: should be COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
         :param s3path: an S3 path (e.g. s3://bucket/path) of the object to add
@@ -69,14 +69,13 @@ class DVS():
         """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         obj = get_s3file_observation_with_remote_cache( s3path, search_endpoint=self.endpoints[SEARCH])
-        if extra:
+        if extra is not None:
             assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
             obj = {**obj, **extra}
 
         self.add( which, obj = obj)
 
-
-    def add_s3prefix(self, which, s3prefix, *, threads=1, extra={}):
+    def add_s3prefix(self, which, s3prefix, *, threads=1, extra=None):
         """Add all of the s3 objects under a prefix."""
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         import boto3
@@ -89,11 +88,11 @@ class DVS():
             self.add_s3path( which, path, extra=extra )
 
 
-    def add_local_paths(self, which, paths, extra={}):
+    def add_local_paths(self, which, paths, extra=None):
         """Add multiple paths using remote cache"""
         file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.endpoints[SEARCH])
         for obj in file_objs:
-            if extra:
+            if extra is not None:
                 assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
                 obj = {**obj, **extra}
             self.add( which, obj=obj)
@@ -103,11 +102,11 @@ class DVS():
         return self.add(COMMIT_BEFORE, obj=obj)
 
 
-    def add_method(self, *args, **kwargs):
+    def add_method(self, *args, obj, **kwargs):
         return self.add(COMMIT_METHOD, obj=obj)
 
 
-    def add_after(self, *args, **kwargs):
+    def add_after(self, *args, obj, **kwargs):
         return self.add(COMMIT_AFTER, obj=obj)
 
 
@@ -122,7 +121,7 @@ class DVS():
         # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON
         all_objects = {}
         # grab the COMMIT_BEFORE, COMMIT_METHOD, and COMMIT_AFTER object lists.
-        for (which,file_objs) in self.file_obj_dict.items():
+        for which, file_objs in self.file_obj_dict.items():
             assert isinstance(file_objs,list)
             assert all([isinstance(obj,dict) for obj in file_objs])
             objects       = objects_dict(file_objs)
@@ -130,9 +129,10 @@ class DVS():
             all_objects   = {**all_objects, **objects}
 
         ### DEBUG CODE START
+        ### IS THAT SUPPOSED TO BE ONLY FOR THE LAST file_obj in the previous loop? That's the only one defined a this point
         logging.debug("# of objects to upload: %d",len(file_objs))
-        for (ct,obj) in enumerate(file_objs,1):
-            logging.debug("object %d: %s",ct,obj)
+        for ct, obj in enumerate(file_objs, 1):
+            logging.debug("object %d: %s",ct, obj)
         logging.debug("commit: %s",json.dumps(self.the_commit,default=str,indent=4))
         ### DEBUG CODE END
 
