@@ -168,9 +168,34 @@ def render_search(obj):
     print("")
 
 
-def print_commit(commit):
-    print("COMMIT:")
-    print(json.dumps(commit,indent=4,default=str,sort_keys=True))
+def json_print(title,obj):
+    print(title)
+    print(json.dumps(obj,indent=4,default=str,sort_keys=True))
+
+def print_last(commits):
+    for c in commits:
+        print(c['created'],c['hexhash'][0:8],end='  ')
+        obj = c['object']
+        if 'hostname' in obj:
+            print(obj['hostname']+":",end='')
+        if 'dirname' in obj:
+            print(obj['dirname']+"/",end='')
+        if 'filename' in obj:
+            print(obj['filename'],end='')
+        if 'metadata' in obj:
+            m = obj['metadata']
+            if 'st_size' in m:
+                print(' '+str(m['st_size'])+' bytes',end='')
+        if 'before' in obj:
+            print(" ".join([o[0:8] for o in obj['before']]),end='')
+        if 'method' in obj:
+            print(" -> [",end='')
+            print(" ".join([o[0:8] for o in obj['method']]),end='')
+            print("] ",end='')
+        if 'after' in obj:
+            print(" =>",end='')
+            print(" ".join([o[0:8] for o in obj['after']]),end='')
+        print()
 
 
 def do_cp(commit,src_path,dst_path):
@@ -226,6 +251,7 @@ if __name__ == "__main__":
     group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
     group.add_argument("--dump",           help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
     group.add_argument("--cp",             help="Copy file1 to file2 and log in DVS. Also works for S3 files", action='store_true')
+    group.add_argument("--last", type=int, help="print last N commits, one per line")
     if ctools is not None:
         ctools.clogging.add_argument(parser,loglevel_default='WARNING')
     args = parser.parse_args()
@@ -248,13 +274,15 @@ if __name__ == "__main__":
         for search in do_search(args.path, debug=args.debug):
             render_search(search)
     elif args.register or args.commit:
-        print_commit( do_commit(commit, args.path))
+        json_print( 'COMMIT', do_commit(commit, args.path))
     elif args.dump:
         limit  = int(args.path[0]) if len(args.path)>0 else None
         offset = int(args.path[1]) if len(args.path)>1 else None
-        print_commit( do_dump(limit,offset))
+        json_print( 'DUMP', do_dump(limit,offset))
+    elif args.last:
+        print_last( do_dump(args.last, 0))
     elif args.cp:
         if len(args.path)!=2:
             print("--cp requires 2 arguments",file=sys.stderr)
             exit(1)
-        print_commit( do_cp(commit,args.path[0],args.path[1]))
+        json_print( do_cp(commit,args.path[0],args.path[1]))
