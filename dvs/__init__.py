@@ -29,6 +29,18 @@ class DVSException(Exception):
 class DVSGitException(DVSException):
     pass
 
+class DVS_Singleton:
+    """The Python singleton pattern. There are many singleton objects,
+    but they all reference the same embedded object,
+    which responds to all getattr requests"""
+
+    instance = None
+    def __init__(self, **kwargs):
+        if DVS_Singleton.instance is None:
+            DVS_Singleton.instance = DVS(**kwargs)
+    def __getattr__(self, name):
+        return getattr(DVS_Singleton.instance, name)
+
 class DVS():
     def __init__(self, base=None, api_endpoint=None, verify=True, debug=False):
         """Start a DVS transaction"""
