@@ -28,6 +28,14 @@ def test_simple_commit():
         dc.commit()
 
 
+def test_singleton():
+    d1 = dvs.DVS_Singleton()
+    d2 = dvs.DVS_Singleton()
+
+    # Make sure it does DVS like things
+    assert isinstance(d1.t0, float)
+    assert d1.t0 == d2.t0
+
 if __name__=='__main__':
     from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
