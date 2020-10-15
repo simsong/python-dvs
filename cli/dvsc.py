@@ -79,18 +79,7 @@ def do_search(paths, debug=False):
     """Ask the server to do a broad search for a string. Return the results."""
     search_list = [{SEARCH_ANY: path,
                     FILENAME: os.path.basename(path) } for path in paths]
-    data = {'searches':json.dumps(search_list, default=str)}
-    if debug:
-        data['debug'] = 'True'
-        print("ENDPOINT: ",ENDPOINTS[SEARCH],file=sys.stderr)
-        print("DATA: ",json.dumps(data,indent=4),file=sys.stderr)
-    r = requests.post(ENDPOINTS[SEARCH],
-                      data=data,
-                      verify=VERIFY)
-    logging.debug("status=%s text: %s",r.status_code, r.text)
-    if r.status_code==HTTP_OK:
-        return r.json()
-    raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
+    return dvs.DVS().search(search_list)
 
 
 def render_search(obj):
@@ -148,9 +137,9 @@ def do_cp(dc, src_path, dst_path):
     use_s3 = False
     if src_path.startswith("s3://"):
         use_s3  = True
-        dc.add_s3_file(src_path)
+        dc.add_s3_paths(dc.COMMIT_BEFORE, [src_path])
     else:
-        dc.add_local_file(src_path)
+        dc.add_local_paths(dc.COMMIT_BEFORE, [src_path])
 
     if dst_path.startswith("s3://"):
         use_s3  = True
@@ -170,9 +159,9 @@ def do_cp(dc, src_path, dst_path):
         shutil.copyfile(src_path,dst_path)
 
     if dst_path.startswith("s3://"):
-        dc.add_s3_file(dst_path)
+        dc.add_s3_path(dc.COMMIT_AFTER, dst_path)
     else:
-        dc.add_local_file(dst_path)
+        dc.add_local_paths(dc.COMMIT_AFTER, [dst_path])
     return dc.commit()
 
 

@@ -35,9 +35,3 @@ def test_singleton():
     # Make sure it does DVS like things
     assert isinstance(d1.t0, float)
     assert d1.t0 == d2.t0
-
-if __name__=='__main__':
-    from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-    args = parser.parse_args()
-    simple_commit_test()

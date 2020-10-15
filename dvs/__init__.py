@@ -212,10 +212,19 @@ class DVS():
             dump_request[OFFSET] = offset
 
         data = {'dump':json.dumps(dump_request, default=str)}
-        r = requests.post(self.api_endpoint + API_V1[DUMP],data=data,verify=self.verify)
+        r = requests.post(self.api_endpoint + API_V1[DUMP], data=data,verify=self.verify)
         if r.status_code==HTTP_OK:
             return r.json()
         raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
+
+    def search(self, search_list):
+        data = {'searches':json.dumps(search_list, default=str)}
+        r = requests.post(self.api_endpoint + API_V1[SEARCH], data=data, verify=self.verify)
+        logging.debug("status=%s text: %s",r.status_code, r.text)
+        if r.status_code==HTTP_OK:
+            return r.json()
+        raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
+
 
 """
 TODO: Take logic in dvs.py/do_commit_send and move here.
