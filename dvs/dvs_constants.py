@@ -44,10 +44,10 @@ OBJECT='object'
 
 # Commit
 COMMIT='commit'                 # commit endpoint
-COMMIT_BEFORE='before'                 # commit: list of hashes before the commit
-COMMIT_AFTER='after'                   # commit: list of hashes after the commit
-COMMIT_MESSAGE='message'               # commit: message with the commit
-COMMIT_METHOD='method'                 # commit: list of hashes for programs that produced the commit
+COMMIT_BEFORE='before'          # commit: list of hashes before the commit
+COMMIT_AFTER='after'            # commit: list of hashes after the commit
+COMMIT_MESSAGE='message'        # commit: message with the commit
+COMMIT_METHOD='method'          # commit: list of hashes for programs that produced the commit
 GIT_SERVER_URL='url'
 METADATA_MTIME='metadata_mtime'
 DIRNAME='dirname'

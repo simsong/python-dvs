@@ -11,9 +11,16 @@ from .dvs_constants import *
 from .dvs_helpers import objects_dict,canonical_json
 from .observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
 
-ENDPOINTS = {SEARCH:"https://dasexperimental.ite.ti.census.gov/api/dvs/search",
-             COMMIT:"https://dasexperimental.ite.ti.census.gov/api/dvs/commit",
-             DUMP:"https://dasexperimental.ite.ti.census.gov/api/dvs/dump" }
+# This should be simplified to be a single API_ENDPOINT which handles v1/search v1/commit and v1/dump
+# And perhaps storage endpoint where files can just be dumped. The files are text files of JSON objects, one per line, in the format:
+# hexhash,<<JSON_OBJECT>>\n
+
+API_ENDPOINT = "https://dasexperimental.ite.ti.census.gov/api/dvs"
+
+# these get added to the endpoint
+API_V1 = {SEARCH:"/v1/search",
+          COMMIT:"/v1/commit",
+          DUMP:"/v1/dump" }
 
 class DVSException(Exception):
     """Base class for DVS Exceptions"""
@@ -23,15 +30,24 @@ class DVSGitException(DVSException):
     pass
 
 class DVS():
-    def __init__(self, base=None, endpoints=None, verify=True, debug=False):
+    def __init__(self, base=None, api_endpoint=None, verify=True, debug=False):
         """Start a DVS transaction"""
         self.the_commit    = base if base is not None else {}
         self.file_obj_dict = {} # where the file objects will end up
-        self.endpoints     = endpoints if endpoints is not None else ENDPOINTS
+        self.api_endpoint  = api_endpoint if api_endpoint is not None else API_ENDPOINT
         self.t0            = time.time()
         self.verify        = verify
         self.debug         = debug
         pass
+
+    def add_kv(self, *, key, value, overwrite=False):
+        """Adds an arbitrary key/value to the commit"""
+        if key in self.the_commit and not overwrite:
+            raise KeyError(f"{key} already in the_commit")
+        if not key.startswith("x-"):
+            raise ValueError(f"{key} must start with 'x-'")
+        self.the_commit[key] = value
+
 
     def add(self, which, *, obj):
         """Basic method for adding an object to one of the lists """
@@ -68,7 +84,7 @@ class DVS():
         :param extra:   additional key:value pairs to be added to the object
         """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        obj = get_s3file_observation_with_remote_cache( s3path, search_endpoint=self.endpoints[SEARCH])
+        obj = get_s3file_observation_with_remote_cache( s3path, search_endpoint=self.api_endpoint + API_V1[SEARCH])
         if extra is not None:
             assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
             obj = {**obj, **extra}
@@ -90,7 +106,7 @@ class DVS():
 
     def add_local_paths(self, which, paths, extra=None):
         """Add multiple paths using remote cache"""
-        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.endpoints[SEARCH])
+        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.api_endpoint + API_V1[SEARCH])
         for obj in file_objs:
             if extra is not None:
                 assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
@@ -108,7 +124,6 @@ class DVS():
 
     def add_after(self, *args, obj, **kwargs):
         return self.add(COMMIT_AFTER, obj=obj)
-
 
     def commit(self, *args, **kwargs):
         """Continue to build the commit.
@@ -137,7 +152,7 @@ class DVS():
         ### DEBUG CODE END
 
         # Send the objects and the commit
-        r = requests.post(self.endpoints[COMMIT],
+        r = requests.post(self.api_endpoint + API_V1[COMMIT],
                           data={API_OBJECTS:canonical_json(all_objects),
                                 API_COMMIT:canonical_json(self.the_commit)},
                           verify=self.verify)
@@ -147,6 +162,20 @@ class DVS():
 
         # Return the commit object
         return r.json()
+
+    def dump_objects(self, *, limit=None, offset=None):
+        """Request the last N objects from the server. Low-level primitive"""
+        dump_request = {}
+        if limit is not None:
+            dump_request[LIMIT] = limit
+        if offset is not None:
+            dump_request[OFFSET] = offset
+
+        data = {'dump':json.dumps(dump_request, default=str)}
+        r = requests.post(self.api_endpoint + API_V1[DUMP],data=data,verify=self.verify)
+        if r.status_code==HTTP_OK:
+            return r.json()
+        raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
 
 """
 TODO: Take logic in dvs.py/do_commit_send and move here.

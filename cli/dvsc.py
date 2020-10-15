@@ -51,7 +51,7 @@ plugins = [plug1]
 ################################################################
 
 
-from dvs import ENDPOINTS
+import dvs
 from dvs.dvs_constants import COMMIT_BEFORE as BEFORE, COMMIT_AFTER as AFTER, COMMIT_METHOD as METHOD, COMMIT_MESSAGE, COMMIT_AUTHOR, COMMIT_DATASET
 from dvs.dvs_constants import LIMIT, DUMP, OFFSET, HTTP_OK, SEARCH, SEARCH_ANY, FILENAME, RESULTS, FILE_METADATA, ST_MTIME, ST_CTIME, OBJECT, DURATION
 from dvs.dvs_helpers  import get_file_observation_with_hash
@@ -64,8 +64,7 @@ if VERIFY==False:
 
 def set_debug_endpoints(prefix):
     """If called, changes the endpoints to be the debug endpoints"""
-    for e in ENDPOINTS:
-        ENDPOINTS[e] = ENDPOINTS[e].replace("census.gov/api",f"census.gov/{prefix}/api")
+    dvs.API_ENDPOINT = dvs.API_ENDPOINT.replace("census.gov/api",f"census.gov/{prefix}/api")
 
 
 def do_commit_local_files(commit, paths):
@@ -119,17 +118,8 @@ def do_commit(commit, paths):
 
 
 def do_dump(limit, offset):
-    dump = {}
-    if limit is not None:
-        dump[LIMIT] = limit
-    if offset is not None:
-        dump[OFFSET] = offset
-
-    data = {'dump':json.dumps(dump, default=str)}
-    r = requests.post(ENDPOINTS[DUMP],data=data,verify=VERIFY)
-    if r.status_code==HTTP_OK:
-        return r.json()
-    raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
+    d = dvs.DVS()
+    return d.dump_objects(limit=limit, offset=offset)
 
 
 def do_search(paths, debug=False):
