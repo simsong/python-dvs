@@ -67,59 +67,12 @@ def set_debug_endpoints(prefix):
     dvs.API_ENDPOINT = dvs.API_ENDPOINT.replace("census.gov/api",f"census.gov/{prefix}/api")
 
 
-def do_commit_local_files(commit, paths):
-    """Find local files, optionally hash them, and send them to the server.
-    1. Send the list of paths to the server and ask if the mtime for any of them are known
-       We make a search_dictionary, which is the search object for each of the paths passed in,
-       indexed by path
-    2. Hash the files that are not known to the server.
-    3. Send to the server a list of all of the files as a commit.
-    TODO: plug-in additional hash attributes.
-    """
-    d = dvs.DVS( base=commit)
-    d.add_local_paths( BEFORE, paths)
-    return d.commit()
-
-
-def do_commit_s3_files(commit, paths):
-    """Get the metadata for each s3 object.
-    Then do a search and ask the sever if it knows for an object with this etag.
-    If the backend knows about this etag, then we don't need to hash again.
-    This could be made more efficient by doing the multiple S3 actions in parallel.
-
-    Moving forward: this should be parallelized.
-    """
-    # See https://stackoverflow.com/questions/42809096/difference-in-boto3-between-resource-client-and-session
-    # for difference between s3 client and resource.
-    # the client is the low-level API that provides all of the access.
-    # The 'resource' is a higher-level object-oriented API.
-    s3_client = boto3.client('s3')  # THIS VARIABLE IS NOT USED
-
-    d = dvs.DVS( base=commit)
-    for path in paths:
-        if path.endswith('/'):
-            d.add_s3prefix( BEFORE,  path)
-        else:
-            d.add_s3path( BEFORE, path )
-    return d.commit( )
-
-def do_commit(commit, paths):
+def do_commit(dc, paths):
     """Given a commit and a set of paths, figure out if they are local files or s3 files, add each, and process.
-    TODO: Make this work with both S3 and local files?
     """
-    # Make sure all files are either local or s3
-    s3count = sum([1 if path.startswith("s3://") else 0 for path in paths])
-    if s3count==0:
-        return do_commit_local_files(commit, paths)
-    elif s3count==len(paths):
-        return do_commit_s3_files(commit, paths)
-    else:
-        raise RuntimeError("All files to be registered must be local or on s3://")
-
-
-def do_dump(limit, offset):
-    d = dvs.DVS()
-    return d.dump_objects(limit=limit, offset=offset)
+    dc.add_local_paths( dc.COMMIT_BEFORE, [path for path in paths if not path.startswith("s3://")] )
+    dc.add_s3_paths( dc.COMMIT_BEFORE, [path for path in paths if path.startswith("s3://")] )
+    return dc.commit()
 
 
 def do_search(paths, debug=False):
@@ -188,16 +141,16 @@ def print_last(commits):
         print()
 
 
-def do_cp(commit,src_path,dst_path):
+def do_cp(dc, src_path, dst_path):
     """Implement a file copy, with the fact of the copy recorded in the DVS"""
 
+    dc.add_git_commit(src=__file__)
     use_s3 = False
-    t0 = time.time()
     if src_path.startswith("s3://"):
         use_s3  = True
-        src_objs = [get_s3file_observation_with_remote_cache(src_path, search_endpoint=ENDPOINTS[SEARCH])]
+        dc.add_s3_file(src_path)
     else:
-        src_objs = get_file_observations_with_remote_cache([src_path],search_endpoint=ENDPOINTS[SEARCH])
+        dc.add_local_file(src_path)
 
     if dst_path.startswith("s3://"):
         use_s3  = True
@@ -209,7 +162,6 @@ def do_cp(commit,src_path,dst_path):
         if os.path.exists(dst_path):
             raise FileExistsError(dst_path)
 
-    method_obj = get_file_observation_with_hash(__file__)
     if use_s3:
         cmd = ['aws','s3','cp',src_path,dst_path]
         print(" ".join(cmd))
@@ -218,13 +170,10 @@ def do_cp(commit,src_path,dst_path):
         shutil.copyfile(src_path,dst_path)
 
     if dst_path.startswith("s3://"):
-        dst_objs = [get_s3file_observation_with_hash(dst_path)]  # TODO: This function doesn't exist, maybe should be _with_remote_cache?
+        dc.add_s3_file(dst_path)
     else:
-        dst_objs = get_file_observations_with_remote_cache([dst_path],search_endpoint=ENDPOINTS[SEARCH])
-    commit[DURATION] = time.time() - t0
-    return do_commit_send(commit,{BEFORE:src_objs,
-                                  METHOD:[method_obj],
-                                  AFTER:dst_objs})
+        dc.add_local_file(dst_path)
+    return dc.commit()
 
 
 if __name__ == "__main__":
@@ -234,7 +183,8 @@ if __name__ == "__main__":
     parser.add_argument("--message", "-m", help="Message when registering the presence of a file")
     parser.add_argument("--dataset", help="Specifies the name of a dataset when registering a file")
     parser.add_argument("--debug", action='store_true')
-    parser.add_argument("--garfi303", action='store_true')
+    parser.add_argument("--git", action='store_true', help='Treat the first filename as a registered git file and add a git commit for it as well')
+    parser.add_argument("--garfi303", action='store_true', help='Use the ~garfi303adm/html endpoint')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--search",   "-s", help="Search for information about the path", action='store_true')
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
@@ -253,26 +203,29 @@ if __name__ == "__main__":
     if args.garfi303:
         set_debug_endpoints("~garfi303adm/html")
 
-    commit = {}
+    dc = dvs.DVS()
+
     if args.message:
-        commit[COMMIT_MESSAGE]= args.message
-        commit[COMMIT_AUTHOR] = os.getenv('USER')
+        dc.set_message(args.message)
+
     if args.dataset:
-        commit[COMMIT_DATASET] = args.dataset
+        dc.set_dataset(args.dataset)
 
     if args.search:
         for search in do_search(args.path, debug=args.debug):
             render_search(search)
     elif args.register or args.commit:
-        json_print( 'COMMIT', do_commit(commit, args.path))
+        if args.git:
+            dc.add_git_commit( src=args.path[0])
+        json_print( 'COMMIT', do_commit(dc, args.path))
     elif args.dump:
         limit  = int(args.path[0]) if len(args.path)>0 else None
         offset = int(args.path[1]) if len(args.path)>1 else None
-        json_print( 'DUMP', do_dump(limit,offset))
+        json_print( 'DUMP', dc.dump_objects(limit=limit, offset=offset))
     elif args.last:
-        print_last( do_dump(args.last, 0))
+        print_last( dc.dump_objects(limit=args.last, offset=0))
     elif args.cp:
         if len(args.path)!=2:
             print("--cp requires 2 arguments",file=sys.stderr)
             exit(1)
-        json_print( do_cp(commit,args.path[0],args.path[1]))
+        json_print( do_cp(dc,args.path[0],args.path[1]))

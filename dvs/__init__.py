@@ -50,19 +50,36 @@ class DVS():
         self.t0            = time.time()
         self.verify        = verify
         self.debug         = debug
-        pass
+        self.COMMIT_BEFORE = COMMIT_BEFORE
+        self.COMMIT_AFTER  = COMMIT_AFTER
+        self.COMMIT_METHOD = COMMIT_METHOD
+        self.COMMIT_AUTHOR = COMMIT_AUTHOR
+        self.COMMIT_DATASET= COMMIT_DATASET
 
     def add_kv(self, *, key, value, overwrite=False):
         """Adds an arbitrary key/value to the commit"""
         if key in self.the_commit and not overwrite:
+            if self.the_commit[key]==value:
+                return
             raise KeyError(f"{key} already in the_commit")
         if not key.startswith("x-"):
             raise ValueError(f"{key} must start with 'x-'")
         self.the_commit[key] = value
 
 
+    def set_message(self, message):
+        self.add_kv(key=COMMIT_MESSAGE, value=message)
+
+    def set_author(self, author):
+        self.add_kv(key=COMMIT_AUTHOR, value=author)
+
+    def set_dataset(self, dataset):
+        self.add_kv(key=COMMIT_DATASET, value=dataset)
+
+
     def add(self, which, *, obj):
         """Basic method for adding an object to one of the lists """
+        logging.debug('add(%s,%s)',which,obj)
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         if which not in self.file_obj_dict:
             self.file_obj_dict[which] = list()
@@ -70,26 +87,29 @@ class DVS():
 
 
     def add_git_commit(self, *, which=COMMIT_METHOD, url=None, commit=None, src=None):
+        logging.debug('=== add_git_commit')
         if commit is None and src is None:
             raise RuntimeError("either commit or src must be provided")
         if commit is not None and src is not None:
             raise RuntimeError("both commit or src may not be provided")
         if src is not None:
             # ask git for the path of the commit for src
+            logging.debug('**** src=%s',src)
             try:
-                commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=os.path.dirname(os.path.abspath(src))).strip()
+                commit = subprocess.check_output(['git','rev-parse','HEAD'],encoding='utf-8',cwd=os.path.dirname(os.path.abspath(src))).strip()
+                logging.debug('git commit=%s',commit)
             except subprocess.CalledProcessError as e:
                 raise DVSGitException("Cannot find git installation")
         if url is None:
             try:
-                origin = subprocess.check_output(['git','remote','get-url','origin'],cwd=os.path.dirname(os.path.abspath(src))).strip()
+                url = subprocess.check_output(['git','remote','get-url','origin'],encoding='utf-8',cwd=os.path.dirname(os.path.abspath(src))).strip()
+                logging.debug('git origin=%s',url)
             except subprocess.CalledProcessError as e:
                 raise DVSGitException("Cannot find git installation")
-        obj = { HEXHASH: commit,
-                GIT_SERVER_URL: url}
+        obj = { HEXHASH: commit, GIT_SERVER_URL: url}
         self.add(which, obj=obj)
 
-    def add_s3path(self, which, s3path, *, extra=None):
+    def add_s3_path(self, which, s3path, *, extra=None):
         """Add an s3 object, possibly hashing it.
         :param which: should be COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
         :param s3path: an S3 path (e.g. s3://bucket/path) of the object to add
@@ -103,7 +123,14 @@ class DVS():
 
         self.add( which, obj = obj)
 
-    def add_s3prefix(self, which, s3prefix, *, threads=1, extra=None):
+    def add_s3_paths(self, which, s3paths, *, extra=None):
+        """Add a set of s3 objects, possibly caching.
+        :param s3paths: paths to add.
+        """
+        for s3path in s3paths:
+            self.add_s3path( which, s3path)
+
+    def add_s3_prefix(self, which, s3prefix, *, threads=1, extra=None):
         """Add all of the s3 objects under a prefix."""
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         import boto3
@@ -143,6 +170,7 @@ class DVS():
         self.the_commit - a dictionary with the base fields.
         self.file_objec_dict - A dictionary with optional COMMIT_BEFORE, COMMIT_METHOD, and COMMIT_AFTER objects,
                      which will be seralized and stored as part of the transaction.
+        returns the object for the commit.
         """
 
         # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON
