@@ -15,10 +15,13 @@ import socket
 import time
 import string
 import sys
+import pwd
+import grp
 
 from .dvs_constants import *
 
-BLOCK_SIZE=1024*1024
+BLOCK_SIZE    = 1024*1024
+INCLUDE_GECOS = False
 
 def comma_args(count,rows=1,parens=False):
     v = ",".join(["%s"]*count)
@@ -34,9 +37,31 @@ def clean_float(v):
     return int(v) if isinstance(v,float) else v
 
 def json_stat(path: str) -> dict:
-    """Performs a stat(2) of a file and returns the results in a dictionary. Do not include atime"""
+    """Performs a stat(2) of a file and returns the results in a
+    dictionary. Do not include atime (it's frequently wrong). Include full
+    username and groupname, rather than just UID/GUID
+
+    :param path: the path to stat
+"""
     s_obj = os.stat(path)
-    return {k: clean_float(getattr(s_obj, k)) for k in dir(s_obj) if k.startswith('st_') and ("atime" not in k)}
+    obj = {k: clean_float(getattr(s_obj, k)) for k in dir(s_obj) if k.startswith('st_') and ("atime" not in k)}
+    try:
+        p = pwd.getpwuid(obj['st_uid'])
+    except KeyError as e:
+        pass
+    else:
+        obj['pw_pwname'] = p.pw_name
+        if INCLUDE_GECOS:
+            obj['pw_gecos'] = p.pw_gecos
+
+    try:
+        g = grp.getgrgid(obj['st_gid'])
+    except KeyError as e:
+        pass
+    else:
+        obj['gr_name'] = g.gr_name
+
+    return obj
 
 def hash_filehandle(f):
     """Right now this is done single-threaded. It could be parallelized.
@@ -97,10 +122,20 @@ def canonical_json_hexhash(obj):
 def get_file_observation(path):
     """Return a file update without the file hashes"""
     fullpath = os.path.abspath(path)
-    return {FILE_METADATA : json_stat(path),
-              FILENAME : os.path.basename(fullpath),
-              DIRNAME  : os.path.dirname(fullpath),
-              HOSTNAME : socket.gethostname()}
+
+    obj= {FILE_METADATA : json_stat(path),
+          FILENAME : os.path.basename(fullpath),
+          DIRNAME  : os.path.dirname(fullpath),
+          HOSTNAME : socket.getfqdn()}
+
+    # Note approach for finding ipaddresses does not work if hostname is not in DNS
+    try:
+        obj[IPADDR] = socket.gethostbyaddr(socket.gethostname())[3][0]
+    except (KeyError, IndexError, socket.herror):
+        pass
+
+    return obj
+
 
 def get_file_observation_with_hash(path):
     """Return a file update with the hash"""

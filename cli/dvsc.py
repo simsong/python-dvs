@@ -114,19 +114,23 @@ def print_last(commits):
             print(obj['dirname']+"/",end='')
         if 'filename' in obj:
             print(obj['filename'],end='')
+        if 'url' in obj:
+            print(obj['url'],end='')
         if 'metadata' in obj:
             m = obj['metadata']
             if 'st_size' in m:
                 print(' '+str(m['st_size'])+' bytes',end='')
         if 'before' in obj:
-            print(" ".join([o[0:8] for o in obj['before']]),end='')
+            print(" ".join([o[0:8] for o in obj['before']]),end=' ')
         if 'method' in obj:
-            print(" -> [",end='')
-            print(" ".join([o[0:8] for o in obj['method']]),end='')
+            print(" + [",end='')
+            print(" ".join([o[0:8] for o in obj['method']]),end=' ')
             print("] ",end='')
         if 'after' in obj:
             print(" =>",end='')
-            print(" ".join([o[0:8] for o in obj['after']]),end='')
+            print(" ".join([o[0:8] for o in obj['after']]),end=' ')
+        if 'message' in obj:
+            print(obj['message'],end='')
         print()
 
 
