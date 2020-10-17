@@ -25,7 +25,7 @@ except ModuleNotFoundError:
     warnings.warn("DVS server tests skipped")
 
 sys.path.append( dirname(__file__))
-from dvs_test_constants import DVS_DEMO_FILE,DVS_DEMO_PATH
+from dvs_test_constants import DVS_DEMO_PATH
 
 @pytest.fixture
 def dbwriter_auth():

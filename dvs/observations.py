@@ -57,9 +57,9 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
 
     # Create the search
     search_dicts = {1 :
-                    { HOSTNAME:DVS_S3_PREFIX + bucket,
-                      DIRNAME:  os.path.dirname(key),
-                      FILENAME: os.path.basename(key),
+                    { HOSTNAME:  DVS_S3_PREFIX + bucket,
+                      DIRNAME:   os.path.dirname(key),
+                      FILENAME:  os.path.basename(key),
                       FILE_METADATA: {ST_SIZE  : s3obj.content_length,
                                       ST_MTIME : int(s3obj.last_modified.timestamp()),
                                       ETAG     : etag},
@@ -143,9 +143,8 @@ def get_file_observations_with_remote_cache(paths:list, *, search_endpoint:str, 
     assert isinstance(paths,list)
     assert all([isinstance(path,str) for path in paths])
     logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
-    hostname = socket.gethostname()
     search_dicts = {ct :
-                    { HOSTNAME: hostname,
+                    { HOSTNAME: socket.getfqdn(),
                       PATH: os.path.abspath(path),
                       DIRNAME: os.path.dirname(os.path.abspath(path)),
                       FILENAME: os.path.basename(path),

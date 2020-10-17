@@ -20,6 +20,6 @@ import dvs                      # ../dvs/
 # for testing, put "." into the local path
 sys.path.append( dirname( __file__ ))
 import dvs_test_constants
-from dvs_test_constants import DVS_DEMO_FILE,DVS_DEMO_PATH
+from dvs_test_constants import DVS_DEMO_PATH
 
-print(DVS_DEMO_FILE, DVS_DEMO_PATH)
+print(DVS_DEMO_PATH)
