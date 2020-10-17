@@ -127,8 +127,10 @@ class DVS():
         """Add a set of s3 objects, possibly caching.
         :param s3paths: paths to add.
         """
+        assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         for s3path in s3paths:
             self.add_s3path( which, s3path)
+
 
     def add_s3_prefix(self, which, s3prefix, *, threads=1, extra=None):
         """Add all of the s3 objects under a prefix."""
@@ -141,6 +143,15 @@ class DVS():
         for k in keys:
             path = 's3://' + bucket + '/' + k
             self.add_s3path( which, path, extra=extra )
+
+
+    def add_s3_path_or_prefix(self, which, s3pop, *, threads=1, extra=None):
+        """Add a path or prefix from S3. If it is a prefix, add all it contains"""
+        assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
+        if s3pop.endswith('/'):
+            return self.add_s3_prefix(which, s3pop, threads=threads, extra=extra)
+        else:
+            return self.add_s3_path(which, s3pop, extra=extra)
 
 
     def add_local_paths(self, which, paths, extra=None):
