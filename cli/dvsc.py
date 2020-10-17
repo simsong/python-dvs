@@ -70,8 +70,12 @@ def set_debug_endpoints(prefix):
 def do_commit(dc, paths):
     """Given a commit and a set of paths, figure out if they are local files or s3 files, add each, and process.
     """
-    dc.add_local_paths( dc.COMMIT_BEFORE, [path for path in paths if not path.startswith("s3://")] )
-    dc.add_s3_paths( dc.COMMIT_BEFORE, [path for path in paths if path.startswith("s3://")] )
+    try:
+        dc.add_local_paths( dc.COMMIT_BEFORE, [path for path in paths if not path.startswith("s3://")] )
+        dc.add_s3_paths_or_prefixes( dc.COMMIT_BEFORE, [path for path in paths if path.startswith("s3://")] )
+    except FileNotFoundError as e:
+        print(f"File not found: {e.args[0]} ({e.__context__})",file=sys.stderr)
+        exit(1)
     return dc.commit()
 
 

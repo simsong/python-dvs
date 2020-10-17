@@ -8,6 +8,7 @@ import requests
 import json
 import sys
 import boto3
+import botocore
 import time
 import shutil
 import subprocess
@@ -26,12 +27,6 @@ def get_bucket_key(loc):
     p = urlparse(loc)
     if p.scheme == 's3':
         return p.netloc, p.path[1:]
-    if p.scheme == '':
-        if p.path.startswith("/"):
-            (ignore, bucket, key) = p.path.split('/', 2)
-        else:
-            (bucket, key) = p.path.split('/', 1)
-        return bucket, key
     assert ValueError("{} is not an s3 location".format(loc))
 
 
@@ -51,7 +46,12 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
     s3obj     = boto3.resource( AWS_S3 ).Object( bucket, key)
 
     # Annoying, S3 ETags come with quotes, which we will now remove
-    etag      = s3obj.e_tag
+    try:
+        etag      = s3obj.e_tag
+    except botocore.exceptions.ClientError as e:
+        if e.response['Error']['Code']=='404':
+            raise FileNotFoundError(path)
+        abort
     if etag[0] == '"':
         etag = s3obj.e_tag[1:-1]
 
