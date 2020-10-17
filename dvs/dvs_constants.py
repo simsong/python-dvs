@@ -63,6 +63,7 @@ HEXHASH='hexhash'
 HEXHASH_ALG='sha1'              # which algorithm we are using
 SEARCH_ANY='*'
 # This is a duplicate SEARCH='search'                 # takes a single dict
+REMOTE_FQDN='remote_fqdn'       # fqdn observed of remote ip address
 REMOTE_ADDR='remote_addr'       # remote address for a commit
 RESULT='result'                 # a single dict
 RESULTS='results'               # a list of dicts
