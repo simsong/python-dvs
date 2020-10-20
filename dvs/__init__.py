@@ -109,7 +109,7 @@ class DVS():
         obj = { HEXHASH: commit, GIT_SERVER_URL: url}
         self.add(which, obj=obj)
 
-    def add_s3_path(self, which, s3path, *, extra=None):
+    def add_s3_path(self, which, s3path, *, threads=1, extra=None):
         """Add an s3 object, possibly hashing it.
         :param which: should be COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
         :param s3path: an S3 path (e.g. s3://bucket/path) of the object to add
@@ -132,7 +132,7 @@ class DVS():
         """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         for s3path in s3paths:
-            self.add_s3path( which, s3path)
+            self.add_s3_path( which, s3path)
 
 
     def add_s3_prefix(self, which, s3prefix, *, threads=1, page_size=100, extra=None):
@@ -150,7 +150,7 @@ class DVS():
         (bucket_name,prefix) = get_bucket_key(s3prefix)
         paths = [f's3://{bucket_name}/{s3object.key}'
                  for s3object in boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix)]
-        self.add_s3_path( which, paths, threads=threads, extra=extra )
+        self.add_s3_paths( which, paths, threads=threads, extra=extra )
 
 
     def add_s3_paths_or_prefixes(self, which, s3pops, *, threads=1, extra=None):

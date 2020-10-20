@@ -41,7 +41,9 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
 
     # https://stackoverflow.com/questions/52402421/retrieving-etag-of-an-s3-object-using-boto3-client
 
-    assert isinstance(path, str)
+    if not isinstance(path, str):
+        raise ValueError(f"path ({path}) is a {type(path)} and not a str.")
+
     (bucket,key)           = get_bucket_key(path)
     s3obj     = boto3.resource( AWS_S3 ).Object( bucket, key)
 
