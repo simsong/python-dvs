@@ -148,7 +148,7 @@ class DVS():
         import boto3
         (bucket_name,prefix) = get_bucket_key(s3prefix)
         paths = [f's3://{bucket_name}/{s3object.key}'
-                 for s3object in boto3.resource('s3').Bucket(bucket_name).objects.filter(Prefix=prefix)]
+                 for s3object in boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix)]
         self.add_s3_path( which, paths, threads=threads, extra=extra )
 
 
