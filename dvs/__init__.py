@@ -109,7 +109,7 @@ class DVS():
         obj = { HEXHASH: commit, GIT_SERVER_URL: url}
         self.add(which, obj=obj)
 
-    def add_s3_path(self, which, s3path, *, extra=None):
+    def add_s3_path(self, which, s3path, *, threads=1, extra=None):
         """Add an s3 object, possibly hashing it.
         :param which: should be COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
         :param s3path: an S3 path (e.g. s3://bucket/path) of the object to add
@@ -123,26 +123,34 @@ class DVS():
 
         self.add( which, obj = obj)
 
-    def add_s3_paths(self, which, s3paths, *, extra=None):
+    def add_s3_paths(self, which, s3paths, *, threads=1, extra=None):
         """Add a set of s3 objects, possibly caching.
+        :param which: should we COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
         :param s3paths: paths to add.
+        :param threads: how many threads to use. Currently ignored.
+
         """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         for s3path in s3paths:
-            self.add_s3path( which, s3path)
+            self.add_s3_path( which, s3path)
 
 
-    def add_s3_prefix(self, which, s3prefix, *, threads=1, extra=None):
-        """Add all of the s3 objects under a prefix."""
+    def add_s3_prefix(self, which, s3prefix, *, threads=1, page_size=100, extra=None):
+        """
+        Add all of the s3 objects under a prefix. We get the objects to add, then send them all to add_s3_path,
+        with the hope that it will be made multithreaded at some point
+        :param which: should we COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
+        :param s3prefix: The s3://bucket/url/ of which we should add.
+        :param threads: how many threads to use.
+        :param page_size: how many objects to fetch at a time; 1000 was creating errors, so we moved to 100
+        :param extra: a dictionary of additional metadata to add to each object being committed
+        """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         import boto3
-        s3_client = boto3.client('s3')
-        (bucket,key) = get_bucket_key(s3prefix)
-        objs = s3_client.list_objects_v2(Bucket=bucket, Prefix=key, MaxKeys=1000)
-        keys = [r['Key'] for r in objs['Contents']]
-        for k in keys:
-            path = 's3://' + bucket + '/' + k
-            self.add_s3_path( which, path, extra=extra )
+        (bucket_name,prefix) = get_bucket_key(s3prefix)
+        paths = [f's3://{bucket_name}/{s3object.key}'
+                 for s3object in boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix)]
+        self.add_s3_paths( which, paths, threads=threads, extra=extra )
 
 
     def add_s3_paths_or_prefixes(self, which, s3pops, *, threads=1, extra=None):
