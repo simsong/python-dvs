@@ -22,6 +22,7 @@ AWS_HEADER_SERVER="Server"
 
 # If this variable is defined, just put the objects there, and do not talk to the serve
 DVS_OBJECT_CACHE_ENV='DVS_OBJECT_CACHE'
+DVS_AWS_S3_ACL_ENV='DVS_AWS_S3_ACL'
 
 
 
@@ -68,6 +69,7 @@ PATH='path'
 HEXHASH='hexhash'
 HEXHASH_ALG='sha1'              # which algorithm we are using
 SEARCH_ANY='*'
+
 # This is a duplicate SEARCH='search'                 # takes a single dict
 REMOTE_FQDN='remote_fqdn'       # fqdn observed of remote ip address
 REMOTE_ADDR='remote_addr'       # remote address for a commit
