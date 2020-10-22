@@ -12,8 +12,9 @@ We use the following Custom elements, as explained here:
 * https://developers.google.com/web/fundamentals/web-components/customelements
 * https://developer.mozilla.org/en-US/docs/Web/API/Window/customElements
 
-We may also use React:
-* https://developer.mozilla.org/en-US/docs/Web/Web_Components
+We may also use Web COmponents with Angular:
+* https://indepth.dev/angular-web-components-a-complete-guide/
+
 
 ### `x-dvs-hash`
 This is the basic custom element for displaying hashes in the DVS user interface. It is called like this:
