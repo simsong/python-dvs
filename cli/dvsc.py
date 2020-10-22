@@ -21,10 +21,12 @@ python dvs.py --garfi303 --debug -m test$$ --register tests/dvs_demo.txt --logle
 """
 
 ### bring in ctools if we can find it
-from os.path import dirname, abspath, basename
-POSSIBLE_DAS_DECENNIAL=dirname(dirname(dirname(dirname(abspath(__file__)))))
+from os.path import dirname, abspath, basename, realpath
+
+POSSIBLE_DAS_DECENNIAL=dirname(dirname(dirname(dirname(realpath(__file__)))))
 if basename(POSSIBLE_DAS_DECENNIAL)=='das_decennial':
     sys.path.append(os.path.join(POSSIBLE_DAS_DECENNIAL,'das_framework'))
+    sys.path.append(os.path.join(POSSIBLE_DAS_DECENNIAL,'programs/python_dvs'))
 try:
     import ctools.clogging
 except ModuleNotFoundError:
