@@ -23,8 +23,8 @@ from ctools import tydoc
 ###
 
 
-from dvs_constants import *
-import dvs_helpers
+from .dvs_constants import *
+from .dvs_helpers import is_hexadecimal,canonical_json,hexhash_string,comma_args,objects_dict
 
 ###
 ### v2 object-based API
@@ -43,7 +43,7 @@ def do_v2search(auth, *, search, debug=False):
     vals   = []
     search_any = search.get(SEARCH_ANY,None)
     search_hashes = []
-    if dvs_helpers.is_hexadecimal(search_any):
+    if is_hexadecimal(search_any):
         search_hashes.append(search_any + "%") # add the wildcard
     if HEXHASH in search:
         search_hashes.append(search.get(HEXHASH)+"%") # add the wildcard
@@ -136,8 +136,8 @@ def store_objects(auth,objects):
     for (key,val) in objects.items():
         if isinstance(val,dict):
             # we were given an object to store
-            val_json = dvs_helpers.canonical_json( val )
-            assert key == dvs_helpers.hexhash_string( val_json )
+            val_json = canonical_json( val )
+            assert key == hexhash_string( val_json )
             vals.append(key)
             vals.append(val_json)
             vals.append(None)
@@ -147,11 +147,11 @@ def store_objects(auth,objects):
             vals.append(None)
             vals.append(val)
     dbfile.DBMySQL.csfr(auth,"INSERT IGNORE INTO dvs_objects (hexhash,object,url) VALUES "
-                        + dvs_helpers.comma_args(3,rows=len(objects),parens=True), vals)
+                        + comma_args(3,rows=len(objects),parens=True), vals)
 
 def get_objects(auth,hexhashes):
     """Returns the objects for the hexhashes. If the hexhash is a url, returns a proxy (which is a string, rather than an object)"""
-    rows = dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_objects where hexhash in" + dvs_helpers.comma_args(len(hexhashes),parens=True),
+    rows = dbfile.DBMySQL.csfr(auth,"SELECT * from dvs_objects where hexhash in" + comma_args(len(hexhashes),parens=True),
                         hexhashes,
                         asDicts=True)
 
@@ -175,7 +175,7 @@ other methods return lists of objects
                 raise ValueError(f"{check} is not a list")
             if not all([isinstance(elem,str) for elem in objlist]):
                 raise ValueError(f"{check} is not a list of strings")
-            if not all([dvs_helpers.is_hexadecimal(elem) for elem in objlist]):
+            if not all([is_hexadecimal(elem) for elem in objlist]):
                 raise ValueError(f"{check} contains a value that is not a hexadecimal hash")
             hashes.extend(objlist)
     if len(hashes)==0:
@@ -183,7 +183,7 @@ other methods return lists of objects
     # Make sure that all of the hashes are in the database
     rows = dbfile.DBMySQL.csfr(auth,
                                "SELECT COUNT(*) FROM dvs_objects where hexhash in "
-                               + dvs_helpers.comma_args(len(hashes),parens=True),
+                               + comma_args(len(hashes),parens=True),
                                hashes)
     assert len(rows)==1
     if rows[0][0]!=len(hashes):
@@ -193,7 +193,7 @@ other methods return lists of objects
     commit[TIME] = time.time()
 
     # store it and return the object
-    objects      = dvs_helpers.objects_dict([commit])
+    objects      = objects_dict([commit])
     store_objects(auth,objects)
     return objects
 
@@ -225,12 +225,12 @@ def commit_api(auth):
         bottle.response.status = 400
         return f"objects parameter is not a JSON-encoded dictionary"
     for (key,value) in objects.items():
-        if not dvs_helpers.is_hexadecimal(key):
+        if not is_hexadecimal(key):
             bottle.response.status = 400
             return f"object key {key} is not a hexadecimal value"
         if isinstance(value,dict):
-            cj = dvs_helpers.canonical_json(value)
-            hh = dvs_helpers.hexhash_string(cj)
+            cj = canonical_json(value)
+            hh = hexhash_string(cj)
             if key != hh:
                 bottle.response.status = 400
                 return f"object key {key} has a computed hash of {hh}"

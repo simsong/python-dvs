@@ -18,6 +18,12 @@ AWS_HEADER_DATE="Date"
 AWS_HEADER_ETAG="Etag"
 AWS_HEADER_SERVER="Server"
 
+# Environment variables
+
+# If this variable is defined, just put the objects there, and do not talk to the serve
+DVS_OBJECT_CACHE_ENV='DVS_OBJECT_CACHE'
+
+
 
 ID='id'
 
