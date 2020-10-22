@@ -57,64 +57,66 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
     if etag[0] == '"':
         etag = s3obj.e_tag[1:-1]
 
-    # Create the search
-    search_dicts = {1 :
-                    { HOSTNAME:  DVS_S3_PREFIX + bucket,
-                      DIRNAME:   os.path.dirname(key),
-                      FILENAME:  os.path.basename(key),
-                      FILE_METADATA: {ST_SIZE  : s3obj.content_length,
-                                      ST_MTIME : int(s3obj.last_modified.timestamp()),
-                                      ETAG     : etag},
-                      ID: 1
-                  }}
+    if DVS_OBJECT_CACHE_ENV not in os.environ:
+        logging.debug("Running with DVS_OBJECT_CACHE. Not checking server for cached hash.")
+    else:
+        logging.debug("Checking server for cached hash by ETag")
+        search_dicts = {1 :
+                        { HOSTNAME:  DVS_S3_PREFIX + bucket,
+                          DIRNAME:   os.path.dirname(key),
+                          FILENAME:  os.path.basename(key),
+                          FILE_METADATA: {ST_SIZE  : s3obj.content_length,
+                                          ST_MTIME : int(s3obj.last_modified.timestamp()),
+                                          ETAG     : etag},
+                          ID: 1
+                      }}
 
 
-    # Now we want to send all of the objects to the server as a list
-    logging.debug("Search send: %s",str(search_dicts))
-    r = requests.post(search_endpoint,
-                      data={'searches':json.dumps(list(search_dicts.values()), default=str)},
-                      verify=verify)
-    if r.status_code!=HTTP_OK:
-        raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+        # Now we want to send all of the objects to the server as a list
+        logging.debug("Search send: %s",str(search_dicts))
+        r = requests.post(search_endpoint,
+                          data={'searches':json.dumps(list(search_dicts.values()), default=str)},
+                          verify=verify)
+        if r.status_code!=HTTP_OK:
+            raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
 
-
-    try:
-        results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in r.json()}
-    except json.decoder.JSONDecodeError as e:
-        print("Invalid response from server for search request: ",r,file=sys.stderr)
-        raise RuntimeError
-
-
-    # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
-    file_objs = []
-    for (search_id,search) in search_dicts.items():
-        dirname       = search[DIRNAME]
-        filename      = search[FILENAME]
-        file_metadata = search[FILE_METADATA]
-        response_filehash = None
         try:
-            results = results_by_searchid[search_id]
-        except KeyError:
-            logging.debug("file %s was not found in search",search_id)
-            continue
+            results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in r.json()}
+        except json.decoder.JSONDecodeError as e:
+            print("Invalid response from server for search request: ",r,file=sys.stderr)
+            raise RuntimeError
 
-        # If any of the objects has a metadata that matches, and it has a hash, use it
-        obj = None
-        for result in results:
-            objr = result[OBJECT]
-            if (objr.get(DIRNAME,None)==dirname  and
-                objr.get(FILENAME,None)==filename and
-                objr.get(FILE_METADATA,None)==file_metadata and
-                FILE_HASHES in objr):
 
-                logging.info("using hash from server for %s ",path)
+        # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
+        file_objs = []
+        for (search_id,search) in search_dicts.items():
+            dirname       = search[DIRNAME]
+            filename      = search[FILENAME]
+            file_metadata = search[FILE_METADATA]
+            response_filehash = None
+            try:
+                results = results_by_searchid[search_id]
+            except KeyError:
+                logging.debug("file %s was not found in search",search_id)
+                results = []
+                continue
 
-                # Take the old values, because it hasn't changed
-                return objr
-            else:
-                logging.debug("Not in %s",result)
+            # If any of the objects has a metadata that matches, and it has a hash, use it
+            obj = None
+            for result in results:
+                objr = result[OBJECT]
+                if (objr.get(DIRNAME,None)==dirname  and
+                    objr.get(FILENAME,None)==filename and
+                    objr.get(FILE_METADATA,None)==file_metadata and
+                    FILE_HASHES in objr):
 
-    logging.debug("Could not find hash; hashing s3 file")
+                    logging.info("using hash from server for %s ",path)
+
+                    # Take the old values, because it hasn't changed
+                    return objr
+                else:
+                    logging.debug("Not in %s",result)
+        logging.debug("Could not find hash; hashing s3 file")
 
     # Use the StreamingBody() to download the object.
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
@@ -144,57 +146,54 @@ def get_file_observations_with_remote_cache(paths:list, *, search_endpoint:str, 
     """
     assert isinstance(paths,list)
     assert all([isinstance(path,str) for path in paths])
-    logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
-    search_dicts = {ct :
-                    { HOSTNAME: socket.getfqdn(),
-                      PATH: os.path.abspath(path),
-                      DIRNAME: os.path.dirname(os.path.abspath(path)),
-                      FILENAME: os.path.basename(path),
-                      FILE_METADATA: json_stat(path),
-                      ID : ct }
-                for (ct,path) in enumerate(paths)}
 
-    # Now we want to send all of the objects to the server as a list
-    logging.debug("Search send: %s",str(search_dicts))
-    r = requests.post(search_endpoint,
-                      data={'searches':json.dumps(list(search_dicts.values()), default=str)},
-                      verify=verify)
-    if r.status_code!=HTTP_OK:
-        raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+    # Get the metadata for each path once.
+    metadata_for_path = {path:json_stat(path) for path in paths}
 
-    try:
-        results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in r.json()}
-    except json.decoder.JSONDecodeError as e:
-        print("Invalid response from server for search request: ",r,file=sys.stderr)
-        raise RuntimeError
+    if DVS_OBJECT_CACHE_ENV in os.environ:
+        logging.debug("Will not search remote cache")
+        results_by_path = {}
+    else:
+        logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
+        search_dicts = {ct :
+                        { HOSTNAME: socket.getfqdn(),
+                          PATH: os.path.abspath(path),
+                          DIRNAME: os.path.dirname(os.path.abspath(path)),
+                          FILENAME: os.path.basename(path),
+                          FILE_METADATA: metadata_for_path[path],
+                          ID : ct }
+                    for (ct,path) in enumerate(paths)}
+        results_by_searchid = {}
+
+        # Now we want to send all of the objects to the server as a list
+        logging.debug("Search send: %s",str(search_dicts))
+        r = requests.post(search_endpoint,
+                          data={'searches':json.dumps(list(search_dicts.values()), default=str)},
+                          verify=verify)
+        if r.status_code!=HTTP_OK:
+            raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+
+        try:
+            results_by_path = {response[SEARCH][PATH] : response[RESULTS] for response in r.json()}
+        except json.decoder.JSONDecodeError as e:
+            print("Invalid response from server for search request: ",r,file=sys.stderr)
+
 
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
     file_objs = []
-    for (search_id,search) in search_dicts.items():
-        path = search[PATH]
-        dirname = search[DIRNAME]
-        filename = search[FILENAME]
-        file_metadata = search[FILE_METADATA]
-        response_filehash = None
-        try:
-            results = results_by_searchid[search_id]
-        except KeyError:
-            logging.debug("file %s was not found in search",search_id)
-            continue
-        # If any of the objects has a metadata that matches, and it has a hash, use it
+    for path in paths:
         obj = None
-        for result in results:
-            objr = result[OBJECT]
-            if (objr.get(DIRNAME,None)==dirname  and
-                objr.get(FILENAME,None)==filename and
-                objr.get(FILE_METADATA,None)==file_metadata and
-                FILE_HASHES in objr):
-                logging.info("using hash from server for %s ",path)
-                # Take the old values and overwrite with new ones
-                obj = {**objr, **get_file_observation(path)}
-                break
-            else:
-                logging.debug("Not in %s",result)
+        if path in results_by_path:
+            results = results_by_path[path]
+            # If any of the objects has a metadata that matches, and it has a hash, use it
+            for result in results:
+                objr = result[OBJECT]
+                if (objr.get(DIRNAME,None)       == os.path.dirname(path)  and
+                    objr.get(FILENAME,None)      == os.path.basename(path) and
+                    objr.get(FILE_METADATA,None) == metadata_for_path[path] and
+                    FILE_HASHES in objr):
+                    logging.info("using hash from server for %s ",path)
+                    obj = {**objr, **get_file_observation(path)}
         if obj is None:
             logging.debug("Could not find hash; hashing file")
             obj = get_file_observation_with_hash(path)

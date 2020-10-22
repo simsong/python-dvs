@@ -42,7 +42,7 @@ class DVS_Singleton:
         return getattr(DVS_Singleton.instance, name)
 
 class DVS():
-    def __init__(self, base=None, api_endpoint=None, verify=True, debug=False):
+    def __init__(self, base=None, api_endpoint=None, verify=True, debug=False, ACL=None):
         """Start a DVS transaction"""
         self.the_commit    = base if base is not None else {}
         self.file_obj_dict = {} # where the file objects will end up
@@ -55,6 +55,10 @@ class DVS():
         self.COMMIT_METHOD = COMMIT_METHOD
         self.COMMIT_AUTHOR = COMMIT_AUTHOR
         self.COMMIT_DATASET= COMMIT_DATASET
+        self.ACL           = ACL
+        if ACL is None and DVS_AWS_S3_ACL_ENV in os.environ:
+            self.ACL = os.environ[DVS_AWS_S3_ACL_ENV]
+
 
     def add_kv(self, *, key, value, overwrite=False):
         """Adds an arbitrary key/value to the commit"""
@@ -75,7 +79,6 @@ class DVS():
 
     def set_dataset(self, dataset):
         self.add_kv(key=COMMIT_DATASET, value=dataset)
-
 
     def add(self, which, *, obj):
         """Basic method for adding an object to one of the lists """
@@ -211,10 +214,32 @@ class DVS():
         logging.debug("commit: %s",json.dumps(self.the_commit,default=str,indent=4))
         ### DEBUG CODE END
 
+        data = {API_OBJECTS:canonical_json(all_objects),
+                API_COMMIT:canonical_json(self.the_commit)}
+
+        if DVS_OBJECT_CACHE_ENV in os.environ:
+            import boto3
+            # https://github.com/boto/boto3/issues/894
+            boto3.set_stream_logger('boto3.resources', logging.INFO, format_string='%(message).1600s')
+            from urllib.parse import urlparse
+            from hashlib import md5
+            data_bytes = canonical_json(data).encode('utf-8')
+            print("len(data_bytes)=",len(data_bytes))
+            m = md5()
+            m.update(data_bytes)
+            hexhash = m.hexdigest()
+            url = os.environ[DVS_OBJECT_CACHE_ENV]+'/'+hexhash
+            p = urlparse(url)
+            if self.ACL:
+                boto3.resource('s3').Object(p.netloc, p.path[1:]).put(Body=data_bytes, ACL=self.ACL)
+            else:
+                boto3.resource('s3').Object(p.netloc, p.path[1:]).put(Body=data_bytes)
+            return data
+
+
         # Send the objects and the commit
         r = requests.post(self.api_endpoint + API_V1[COMMIT],
-                          data={API_OBJECTS:canonical_json(all_objects),
-                                API_COMMIT:canonical_json(self.the_commit)},
+                          data=data,
                           verify=self.verify)
         logging.debug("response: %s",r)
         if r.status_code!=HTTP_OK:
