@@ -57,11 +57,6 @@ from dvs.dvs_constants import LIMIT, DUMP, OFFSET, HTTP_OK, SEARCH, SEARCH_ANY, 
 from dvs.dvs_helpers  import get_file_observation_with_hash
 from dvs.observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
 
-VERIFY=False
-if VERIFY==False:
-    import urllib3
-    urllib3.disable_warnings()
-
 def set_debug_endpoints(prefix):
     """If called, changes the endpoints to be the debug endpoints"""
     dvs.API_ENDPOINT = dvs.API_ENDPOINT.replace("census.gov/api",f"census.gov/{prefix}/api")
@@ -79,11 +74,11 @@ def do_commit(dc, paths):
     return dc.commit()
 
 
-def do_search(paths, debug=False):
+def do_search(dc, paths, debug=False):
     """Ask the server to do a broad search for a string. Return the results."""
     search_list = [{SEARCH_ANY: path,
                     FILENAME: os.path.basename(path) } for path in paths]
-    return dvs.DVS().search(search_list)
+    return dc.search(search_list)
 
 
 def render_search(obj):
@@ -182,6 +177,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action='store_true')
     parser.add_argument("--git", action='store_true', help='Treat the first filename as a registered git file and add a git commit for it as well')
     parser.add_argument("--garfi303", action='store_true', help='Use the ~garfi303adm/html endpoint')
+    parser.add_argument("--noverify", '--insecure', '-K', action='store_true', help='Disable certificate check')
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--search",   "-s", help="Search for information about the path", action='store_true')
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
@@ -200,7 +196,13 @@ if __name__ == "__main__":
     if args.garfi303:
         set_debug_endpoints("~garfi303adm/html")
 
-    dc = dvs.DVS()
+    verify = True
+    if args.noverify:
+        import urllib3
+        urllib3.disable_warnings()
+        verify = False
+
+    dc = dvs.DVS(verify=verify)
 
     if args.message:
         dc.set_message(args.message)
@@ -209,7 +211,7 @@ if __name__ == "__main__":
         dc.set_dataset(args.dataset)
 
     if args.search:
-        for search in do_search(args.path, debug=args.debug):
+        for search in do_search(dc, args.path, debug=args.debug):
             render_search(search)
     elif args.register or args.commit:
         if args.git:
