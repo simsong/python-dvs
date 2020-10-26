@@ -1,6 +1,5 @@
 import os
 import os.path
-import requests
 import urllib3
 import logging
 import datetime
@@ -11,6 +10,8 @@ import boto3
 import time
 import shutil
 import subprocess
+import io
+import copy
 
 """
 This is the dvs CLI client.
@@ -55,8 +56,8 @@ plugins = [plug1]
 
 import dvs
 from dvs.dvs_constants import COMMIT_BEFORE as BEFORE, COMMIT_AFTER as AFTER, COMMIT_METHOD as METHOD, COMMIT_MESSAGE, COMMIT_AUTHOR, COMMIT_DATASET
-from dvs.dvs_constants import LIMIT, DUMP, OFFSET, HTTP_OK, SEARCH, SEARCH_ANY, FILENAME, RESULTS, FILE_METADATA, ST_MTIME, ST_CTIME, OBJECT, DURATION
-from dvs.dvs_helpers  import get_file_observation_with_hash
+from dvs.dvs_constants import LIMIT, DUMP, OFFSET, HTTP_OK, SEARCH, SEARCH_ANY, FILENAME, RESULTS, FILE_METADATA, ST_MTIME, ST_CTIME, OBJECT, DURATION, HEXHASH
+from dvs.dvs_helpers  import get_file_observation_with_hash,length_of_unique_prefix
 from dvs.observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
 
 def set_debug_endpoints(prefix):
@@ -83,56 +84,99 @@ def do_search(dc, paths, debug=False):
     return dc.search(search_list)
 
 
-def render_search(obj):
-    if len(obj[RESULTS])==0:
+def obj2line(c, hashlen=8):
+    f = io.StringIO()
+    print(c['created'],c['hexhash'][0:hashlen],end='  ',file=f)
+    obj = c['object']
+    if 'hostname' in obj:
+        print(obj['hostname']+":",end='',file=f)
+    if 'dirname' in obj:
+        print(obj['dirname']+"/",end='',file=f)
+    if 'filename' in obj:
+        print(obj['filename'],end='',file=f)
+    if 'url' in obj:
+        print(obj['url'],end='',file=f)
+    if 'metadata' in obj:
+        m = obj['metadata']
+        if 'st_size' in m:
+            print(' '+str(m['st_size'])+' bytes',end='',file=f)
+    if 'before' in obj:
+        print(" ".join([o[0:8] for o in obj['before']]),end=' ',file=f)
+    if 'method' in obj:
+        print(" + [",end='',file=f)
+        print(" ".join([o[0:8] for o in obj['method']]),end=' ',file=f)
+        print("] ",end='',file=f)
+    if 'after' in obj:
+        print(" =>",end='',file=f)
+        print(" ".join([o[0:8] for o in obj['after']]),end=' ',file=f)
+    if 'message' in obj:
+        print(obj['message'],end='',file=f)
+    return f.getvalue()
+
+def obj2str(c):
+    """return an object as a nicely formatted string"""
+    result = copy.copy(c)
+    # Go through result and delete stuff we don't want to see and reformat what we need to reformat
+    for (a,b) in ((FILE_METADATA,ST_MTIME),
+                  (FILE_METADATA,ST_CTIME)):
+        try:
+            result[OBJECT][a][b] = time.asctime(time.localtime(int(result[OBJECT][a][b]))) + " (converted)"
+        except KeyError:
+            pass
+    return(json.dumps(result,indent=4,default=str))
+    
+
+def shortest_prefix_for_objects(objects):
+    return length_of_unique_prefix([obj[HEXHASH] for obj in objects])
+    
+
+def print_last(commits):
+    for c in commits:
+        print(obj2line(c, shortest_prefix_for_objects(commits)))
+
+def render_search_result(search_results):
+    search_str = search_results['search']['*']
+    results = search_results[RESULTS]
+    if len(results)==0:
         print("   not on file\n")
         return
-    for (ct,result) in enumerate(obj[RESULTS]):
-        if ct>0:
+
+    # First do objectid disambiguation
+    prefixes = list()
+    for result in results:
+        if result[HEXHASH].startswith(search_str):
+            prefixes.append(result)
+    if len(prefixes)>1:
+        # Many objects were returned by a search for this hexhash.
+        # Display a one-line for each, with disambiguation
+        print("Search disambiguation:")
+        shortest = shortest_prefix_for_objects(prefixes)
+        for c in prefixes:
+            print(obj2line(c, shortest))
+        print()
+    else:
+        prefixes = list()        # clear it
+        
+    # Next do hash disambiguation
+    print("(Hash disambiguation not yet implemented.)")
+
+    # Print the remaining
+    count = 0
+    for result in results:
+        if result in prefixes:
+            continue
+        count += 1
+        if count==1:
+            print("Search Results:")
+        elif count > 1:
             print("   ---   ")
-        # Go through result and delete stuff we don't want to see and reformat what we need to reformat
-        for (a,b) in ((FILE_METADATA,ST_MTIME),
-                      (FILE_METADATA,ST_CTIME)):
-            try:
-                result[OBJECT][a][b] = time.asctime(time.localtime(int(result[OBJECT][a][b]))) + " (converted)"
-            except KeyError:
-                pass
-        print(json.dumps(result,indent=4,default=str))
+        print(obj2str(result))
     print("")
 
 
 def json_print(title,obj):
     print(title)
     print(json.dumps(obj,indent=4,default=str,sort_keys=True))
-
-def print_last(commits):
-    for c in commits:
-        print(c['created'],c['hexhash'][0:8],end='  ')
-        obj = c['object']
-        if 'hostname' in obj:
-            print(obj['hostname']+":",end='')
-        if 'dirname' in obj:
-            print(obj['dirname']+"/",end='')
-        if 'filename' in obj:
-            print(obj['filename'],end='')
-        if 'url' in obj:
-            print(obj['url'],end='')
-        if 'metadata' in obj:
-            m = obj['metadata']
-            if 'st_size' in m:
-                print(' '+str(m['st_size'])+' bytes',end='')
-        if 'before' in obj:
-            print(" ".join([o[0:8] for o in obj['before']]),end=' ')
-        if 'method' in obj:
-            print(" + [",end='')
-            print(" ".join([o[0:8] for o in obj['method']]),end=' ')
-            print("] ",end='')
-        if 'after' in obj:
-            print(" =>",end='')
-            print(" ".join([o[0:8] for o in obj['after']]),end=' ')
-        if 'message' in obj:
-            print(obj['message'],end='')
-        print()
 
 
 def do_cp(dc, src_path, dst_path):
@@ -213,8 +257,8 @@ if __name__ == "__main__":
         dc.set_dataset(args.dataset)
 
     if args.search:
-        for search in do_search(dc, args.path, debug=args.debug):
-            render_search(search)
+        for search_result in do_search(dc, args.path, debug=args.debug):
+            render_search_result(search_result)
     elif args.register or args.commit:
         if args.git:
             dc.add_git_commit( src=args.path[0])
