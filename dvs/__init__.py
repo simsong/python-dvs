@@ -119,7 +119,7 @@ class DVS():
         :param extra:   additional key:value pairs to be added to the object
         """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        obj = get_s3file_observation_with_remote_cache( s3path, search_endpoint=self.api_endpoint + API_V1[SEARCH])
+        obj = get_s3file_observation_with_remote_cache( s3path, search_endpoint=self.api_endpoint + API_V1[SEARCH], verify=self.verify)
         if extra is not None:
             assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
             obj = {**obj, **extra}
@@ -168,7 +168,8 @@ class DVS():
 
     def add_local_paths(self, which, paths, extra=None):
         """Add multiple paths using remote cache"""
-        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.api_endpoint + API_V1[SEARCH])
+        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.api_endpoint + API_V1[SEARCH], 
+                                                            verify=self.verify)
         for obj in file_objs:
             if extra is not None:
                 assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
@@ -257,7 +258,7 @@ class DVS():
             dump_request[OFFSET] = offset
 
         data = {'dump':json.dumps(dump_request, default=str)}
-        r = requests.post(self.api_endpoint + API_V1[DUMP], data=data,verify=self.verify)
+        r = requests.post(self.api_endpoint + API_V1[DUMP], data=data, verify=self.verify)
         if r.status_code==HTTP_OK:
             return r.json()
         raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")

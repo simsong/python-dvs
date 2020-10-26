@@ -22,6 +22,7 @@ from .dvs_constants import *
 
 BLOCK_SIZE    = 1024*1024
 INCLUDE_GECOS = False
+MIN_HASH_LENGTH = 6
 
 def comma_args(count,rows=1,parens=False):
     v = ",".join(["%s"]*count)
@@ -145,3 +146,27 @@ def get_file_observation_with_hash(path):
 def objects_dict(objects):
     """Given a list of objects, return a dictionary where the key for each object is is canonical_json_hexhash"""
     return {canonical_json_hexhash(obj):obj for obj in objects}
+
+
+def check_length_is_unique_prefix(hexhashes:set, length:int) -> bool:
+    """Returns True if the length is sufficient to distinguish all of the hex hashes."""
+    prefixes = set()
+    for hexhash in hexhashes:
+        prefix = hexhash[0:length]
+        if prefix in prefixes:
+            return False
+        prefixes.add(prefix)
+    return True
+
+def length_of_unique_prefix(hexhashes) -> int:
+    """Given a list of hexhashes, return the length of necessary to distinguish them all.
+    There is probably a clever O(N) way to do this, but I coudln't figure it out. This seems fast enough.
+    :params hexhashes: a list of hexhashes
+    returns an integer.
+    """
+    # We could probably do this with a binary search. But instead, we just start with 8 and count up
+    hexhashes = set(hexhashes)  # make sure we have each exactly once
+    for length in range(MIN_HASH_LENGTH, max([len(hexhash) for hexhash in hexhashes])):
+        if check_length_is_unique_prefix(hexhashes,length):
+            return length
+    raise RuntimeError("We should not reach here")

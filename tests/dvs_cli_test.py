@@ -41,7 +41,10 @@ def test_do_search(s3loc):
     """Search the file that was just registered and see if its hash is present"""
     hashes = dvs_helpers.hash_file( DVS_DEMO_PATH )
 
-    commit = dvs_cli.do_cp( dvs.DVS(), DVS_DEMO_PATH, s3loc)
+    dc = dvs.DVS(verify=False)
+    print(dc)
+
+    commit = dvs_cli.do_cp( dc, DVS_DEMO_PATH, s3loc)
 
     searches = dvs_cli.do_search([hashes[SHA1]], debug=True)
     for search in searches:
