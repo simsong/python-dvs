@@ -57,7 +57,7 @@ def get_s3file_observation_with_remote_cache(path:str, *, search_endpoint:str, v
     if etag[0] == '"':
         etag = s3obj.e_tag[1:-1]
 
-    if DVS_OBJECT_CACHE_ENV not in os.environ:
+    if DVS_OBJECT_CACHE_ENV in os.environ:
         logging.debug("Running with DVS_OBJECT_CACHE. Not checking server for cached hash.")
     else:
         logging.debug("Checking server for cached hash by ETag")
