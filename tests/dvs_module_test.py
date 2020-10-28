@@ -29,8 +29,8 @@ def test_simple_commit():
 
 
 def test_singleton():
-    d1 = dvs.DVS_Singleton(Verify=False)
-    d2 = dvs.DVS_Singleton(Verify=False)
+    d1 = dvs.DVS_Singleton(verify=False)
+    d2 = dvs.DVS_Singleton(verify=False)
 
     # Make sure it does DVS like things
     assert isinstance(d1.t0, float)
