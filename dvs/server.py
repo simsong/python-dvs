@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
-
 """
 dvs server:
 Functions that support the server.
 
+Requires ctools
 """
 
 import os
