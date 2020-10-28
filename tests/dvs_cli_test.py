@@ -46,7 +46,7 @@ def test_do_search(s3loc):
 
     commit = dvs_cli.do_cp( dc, DVS_DEMO_PATH, s3loc)
 
-    searches = dvs_cli.do_search([hashes[SHA1]], debug=True)
+    searches = dvs_cli.do_search(dc, [hashes[SHA1]], debug=True)
     for search in searches:
         for result in search[RESULTS]:
             if (result[OBJECT][FILENAME] == os.path.basename(DVS_DEMO_PATH)  and
