@@ -130,9 +130,42 @@ def shortest_prefix_for_objects(objects):
     return length_of_unique_prefix([obj[HEXHASH] for obj in objects])
     
 
-def print_last(commits):
-    for c in commits:
-        print(obj2line(c, shortest_prefix_for_objects(commits)))
+def print_graph(objs):
+    # Get a list of all the object hexhashes
+    nodes = {}
+    links = []
+
+    def add_hash(hexhash):
+        if hexhash not in nodes:
+            nodes[hexhash] = {'id':hexhash}
+
+
+    for obj in objs:
+        hexhash = obj['hexhash']
+        add_hash( hexhash )
+        if 'object' in obj and 'before' in obj['object']:
+            for h2 in obj['object']['before']:
+                add_hash(h2)
+                links.append({'source':h2, 'target':hexhash, 'strength':0.1})
+                
+        if 'object' in obj and 'method' in obj['object']:
+            for h2 in obj['object']['method']:
+                add_hash(h2)
+                links.append({'source':h2, 'target':hexhash, 'strength':1.0})
+                
+        if 'object' in obj and 'before' in obj['object']:
+            for h2 in obj['object']['before']:
+                add_hash(h2)
+                links.append({'source':hexhash, 'target':h2, 'strength':0.1})
+                
+    ret = {'nodes':[node for node in nodes.values()],
+           'links': links}
+    print( json.dumps(ret, indent=4, default=str))
+        
+
+def print_last(objs):
+    for obj in objs:
+        print(obj2line(c, shortest_prefix_for_objects(objs)))
 
 def render_search_result(search_results):
     search_str = search_results['search']['*']
@@ -229,8 +262,15 @@ if __name__ == "__main__":
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
     group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
     group.add_argument("--dump",           help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
-    group.add_argument("--cp",             help="Copy file1 to file2 and log in DVS. Also works for S3 files", action='store_true')
+
+    group.add_argument("--cp",             
+                       help="Copy file1 to file2 and log in DVS. Also works for S3 files", 
+                       action='store_true')
+
     group.add_argument("--last", type=int, help="print last N commits, one per line")
+
+    parser.add_argument("--graph", help="If --last, render in graph format", action='store_true')
+
     if ctools is not None:
         ctools.clogging.add_argument(parser,loglevel_default='WARNING')
     args = parser.parse_args()
@@ -268,7 +308,11 @@ if __name__ == "__main__":
         offset = int(args.path[1]) if len(args.path)>1 else None
         json_print( 'DUMP', dc.dump_objects(limit=limit, offset=offset))
     elif args.last:
-        print_last( dc.dump_objects(limit=args.last, offset=0))
+        objs = dc.dump_objects(limit=args.last, offset=0)
+        if args.graph:
+            print_graph( objs )
+        else:
+            print_last( objs )
     elif args.cp:
         if len(args.path)!=2:
             print("--cp requires 2 arguments",file=sys.stderr)
