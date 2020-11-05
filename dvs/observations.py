@@ -109,14 +109,15 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=True ):
 
 
 
-def get_s3file_observation_with_remote_cache(s3paths:list, *, search_endpoint:str, verify=True, threads=DEFAULT_THREADS):
-    """Given an S3 path,
-    1. Get the metadata from AWS for the object.
-    2. Given this metadata, see if the object is registered in the DVS server.
-    3. If it is registered, return the re is metadata on the Object server that matches.
-    3. If there is, use the hash that is already on the object server.
-    4. If not, download the S3 file and hash it.
-    5. Return an observation"""
+    def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:str, verify=True, threads=DEFAULT_THREADS):
+        """Given an S3 path,
+        1. Get the metadata from AWS for the object.
+        2. Given this metadata, see if the object is registered in the DVS server.
+        3. If it is registered, return the re is metadata on the Object server that matches.
+        3. If there is, use the hash that is already on the object server.
+        4. If not, download the S3 file and hash it.
+        5. Return an observation
+        """
 
     # https://stackoverflow.com/questions/52402421/retrieving-etag-of-an-s3-object-using-boto3-client
 
