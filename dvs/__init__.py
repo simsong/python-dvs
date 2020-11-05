@@ -133,19 +133,6 @@ class DVS():
             self.add( which, obj = s3obj)
 
 
-    def add_s3_prefix(self, which, s3prefix, *, threads=DEFAULT_THREADS, page_size=100, extra=None):
-        """
-        Add all of the s3 objects under a prefix. We get the objects to add, then send them all to add_s3_path,
-        with the hope that it will be made multithreaded at some point
-        :param which: should we COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
-        :param s3prefix: The s3://bucket/url/ of which we should add.
-        :param threads: how many threads to use.
-        :param page_size: how many objects to fetch at a time; 1000 was creating errors, so we moved to 100
-        :param extra: a dictionary of additional metadata to add to each object being committed
-        """
-        self.add_s3_paths( which, paths, threads=threads, extra=extra )
-
-
     def add_s3_paths_or_prefixes(self, which, s3pops, *, threads=DEFAULT_THREADS, extra=None):
         """Add a path or prefix from S3. If it is a prefix, add all it contains"""
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
@@ -159,7 +146,7 @@ class DVS():
                 s3paths.extend(paths)
             else:
                 s3paths.append(s3pop)
-        return self.add_s3_paths(which, s3paths, threads=threads, extra=extra)
+        self.add_s3_paths(which, s3paths, threads=threads, extra=extra)
 
 
     def add_local_paths(self, which, paths, extra=None):
