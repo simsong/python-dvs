@@ -57,8 +57,7 @@ plugins = [plug1]
 import dvs
 from dvs.dvs_constants import COMMIT_BEFORE as BEFORE, COMMIT_AFTER as AFTER, COMMIT_METHOD as METHOD, COMMIT_MESSAGE, COMMIT_AUTHOR, COMMIT_DATASET
 from dvs.dvs_constants import LIMIT, DUMP, OFFSET, HTTP_OK, SEARCH, SEARCH_ANY, FILENAME, RESULTS, FILE_METADATA, ST_MTIME, ST_CTIME, OBJECT, DURATION, HEXHASH
-from dvs.dvs_helpers  import get_file_observation_with_hash,length_of_unique_prefix
-from dvs.observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
+from dvs.dvs_helpers   import length_of_unique_prefix
 
 def set_debug_endpoints(prefix):
     """If called, changes the endpoints to be the debug endpoints"""
@@ -241,7 +240,7 @@ def do_cp(dc, src_path, dst_path):
         shutil.copyfile(src_path,dst_path)
 
     if dst_path.startswith("s3://"):
-        dc.add_s3_path(dc.COMMIT_AFTER, dst_path)
+        dc.add_s3_paths(dc.COMMIT_AFTER, [dst_path])
     else:
         dc.add_local_paths(dc.COMMIT_AFTER, [dst_path])
     return dc.commit()
