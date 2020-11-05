@@ -153,7 +153,7 @@ class DVS():
         s3paths = []
         for s3pop in s3pops:
             if s3pop.endswith('/'):
-                (bucket_name,prefix) = get_bucket_key(s3prefix)
+                (bucket_name,prefix) = get_bucket_key(s3pop)
                 paths = [f's3://{bucket_name}/{s3object.key}'
                          for s3object in boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix)]
                 s3paths.extend(paths)
