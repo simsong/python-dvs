@@ -1,0 +1,22 @@
+{
+    "objectid": 8214,
+    "created": "2020-10-20 10:43:19",
+    "hexhash": "ee3cde2de57916a9603489138404d5263fafb78e",
+    "object": {
+        "hashes": {
+            "md5": "aaff84e79883f0de129f73172a35320e",
+            "sha1": "fbd1e1527f14e0e76a50490e034f50a4d3637a7b",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "sha512": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+        },
+        "dirname": "users/lecle301/topdown_RI/data",
+        "filename": "part-00843",
+        "hostname": "s3://uscb-decennial-ite-das",
+        "metadata": {
+            "etag": "4ab6de017e81c8ae07439c2858377fc6",
+            "st_size": 4080,
+            "st_mtime": "Tue Oct 20 10:41:22 2020 (converted)"
+        }
+    },
+    "url": null
+}

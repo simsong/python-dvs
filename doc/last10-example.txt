@@ -1,0 +1,12 @@
+perms-ITE-MASTER:hadoop@/mnt/users/garfi303/python_dvs/doc $ python ../cli/dvsc.py --last 10
+2020-10-25 10:22:03 7590e21c  4bc4bb42 baea1f56 028b6a97 bb03c4c7 ab236fc0 8fef3477  + [4f6d968b ]  =>e6a999f7
+2020-10-25 10:22:03 e6a999f7  s3://uscb-decennial-ite-das:tmp/s3test-1603635719.txt 10000 bytes
+2020-10-25 10:22:03 bb03c4c7  s3://uscb-decennial-ite-das:tmp/s3test-1603635719/part-00002 2000 bytes
+2020-10-25 10:22:03 baea1f56  s3://uscb-decennial-ite-das:tmp/s3test-1603635719/part-00000 2000 bytes
+2020-10-25 10:22:03 ab236fc0  s3://uscb-decennial-ite-das:tmp/s3test-1603635719/part-00003 2000 bytes
+2020-10-25 10:22:03 8fef3477  s3://uscb-decennial-ite-das:tmp/s3test-1603635719/part-00004 2000 bytes
+2020-10-25 10:22:03 4bc4bb42  s3://uscb-decennial-ite-das:tmp/s3test-1603635719/_SUCCESS 0 bytes
+2020-10-25 10:22:03 028b6a97  s3://uscb-decennial-ite-das:tmp/s3test-1603635719/part-00001 2000 bytes
+2020-10-25 10:22:01 0939733f  a5ec4152 26e0d84d c8e785cd e627a0f1 11d46286 90ec7c2e  + [4f6d968b ]  =>d4e47788
+2020-10-25 10:22:01 e627a0f1  s3://uscb-decennial-ite-das:tmp/s3test-1603635718/part-00002 2000 bytes
+perms-ITE-MASTER:hadoop@/mnt/users/garfi303/python_dvs/doc $
