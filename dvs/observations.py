@@ -21,7 +21,7 @@ Routines for getting observations.
 from .dvs_constants import *
 from .dvs_helpers  import *
 
-DEFAULT_THREADS
+DEFAULT_THREADS=40
 
 def get_bucket_key(loc):
     """Given a location, return the (bucket,key)"""
