@@ -16,6 +16,7 @@ Test programs for dvs client, both locally and to the sever
 
 # Get 'dvs' into the path
 from os.path import dirname,abspath
+
 sys.path.append( dirname(dirname(abspath(__file__))))
 import dvs
 import dvs.dvs_helpers as dvs_helpers
