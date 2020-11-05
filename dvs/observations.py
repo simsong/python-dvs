@@ -150,9 +150,9 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
         if s3path in s3path_searches:
             objs.append(s3path_searches[s3path])
         else:
-            print("S3 Hashing s3://{}/{} {:,} bytes...".format(bucket,key,s3obj.content_length),file=sys.stderr)
             (bucket,key) = get_bucket_key(s3path)
             s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
+            print("S3 Hashing s3://{}/{} {:,} bytes...".format(bucket,key,s3obj.content_length),file=sys.stderr)
             hashes = hash_filehandle(s3obj.get()['Body'])
             objr = {HOSTNAME: DVS_S3_PREFIX + bucket,
                     DIRNAME:  os.path.dirname(key),
