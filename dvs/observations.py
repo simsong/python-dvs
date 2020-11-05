@@ -159,7 +159,7 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
                     FILENAME: os.path.basename(key),
                     FILE_METADATA: {ST_SIZE  : s3obj.content_length,
                                     ST_MTIME : int(s3obj.last_modified.timestamp()),
-                                    ETAG     : s3obj.etag},
+                                    ETAG     : s3obj.e_tag},
                     FILE_HASHES: hashes}
             objs.append(objr)
     return objs
