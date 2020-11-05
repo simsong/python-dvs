@@ -124,11 +124,11 @@ def obj2str(c):
         except KeyError:
             pass
     return(json.dumps(result,indent=4,default=str))
-    
+
 
 def shortest_prefix_for_objects(objects):
     return length_of_unique_prefix([obj[HEXHASH] for obj in objects])
-    
+
 
 def print_graph(objs):
     # Get a list of all the object hexhashes
@@ -147,21 +147,21 @@ def print_graph(objs):
             for h2 in obj['object']['before']:
                 add_hash(h2)
                 links.append({'source':h2, 'target':hexhash, 'strength':0.1})
-                
+
         if 'object' in obj and 'method' in obj['object']:
             for h2 in obj['object']['method']:
                 add_hash(h2)
                 links.append({'source':h2, 'target':hexhash, 'strength':1.0})
-                
+
         if 'object' in obj and 'before' in obj['object']:
             for h2 in obj['object']['before']:
                 add_hash(h2)
                 links.append({'source':hexhash, 'target':h2, 'strength':0.1})
-                
+
     ret = {'nodes':[node for node in nodes.values()],
            'links': links}
     print( json.dumps(ret, indent=4, default=str))
-        
+
 
 def print_last(objs):
     for obj in objs:
@@ -189,7 +189,7 @@ def render_search_result(search_results):
         print()
     else:
         prefixes = list()        # clear it
-        
+
     # Next do hash disambiguation
     print("(Hash disambiguation not yet implemented.)")
 
@@ -263,8 +263,8 @@ if __name__ == "__main__":
     group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
     group.add_argument("--dump",           help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
 
-    group.add_argument("--cp",             
-                       help="Copy file1 to file2 and log in DVS. Also works for S3 files", 
+    group.add_argument("--cp",
+                       help="Copy file1 to file2 and log in DVS. Also works for S3 files",
                        action='store_true')
 
     group.add_argument("--last", type=int, help="print last N commits, one per line")

@@ -53,5 +53,3 @@ def check_length_is_unique_prefix():
     assert check_length_is_unique_prefix(['aaa','bbb','abc'],2)==True
     assert length_of_unique_prefix(['aaa','bbb','abc'])==2
     assert length_of_unique_prefix(['aaa','bbb','abc','abcd'])==4
-
-

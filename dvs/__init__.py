@@ -9,7 +9,7 @@ import os
 
 from .dvs_constants import *
 from .dvs_helpers import objects_dict,canonical_json
-from .observations import get_s3file_observation_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
+from .observations import get_s3file_observations_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
 
 # This should be simplified to be a single API_ENDPOINT which handles v1/search v1/commit and v1/dump
 # And perhaps storage endpoint where files can just be dumped. The files are text files of JSON objects, one per line, in the format:
@@ -99,32 +99,20 @@ class DVS():
             # ask git for the path of the commit for src
             logging.debug('**** src=%s',src)
             try:
-                commit = subprocess.check_output(['git','rev-parse','HEAD'],encoding='utf-8',cwd=os.path.dirname(os.path.abspath(src))).strip()
+                commit = subprocess.check_output(['git','rev-parse','HEAD'],encoding='utf-8',
+                                                 cwd=os.path.dirname(os.path.abspath(src))).strip()
                 logging.debug('git commit=%s',commit)
             except subprocess.CalledProcessError as e:
                 raise DVSGitException("Cannot find git installation")
         if url is None:
             try:
-                url = subprocess.check_output(['git','remote','get-url','origin'],encoding='utf-8',cwd=os.path.dirname(os.path.abspath(src))).strip()
+                url = subprocess.check_output(['git','remote','get-url','origin'],encoding='utf-8',
+                                              cwd=os.path.dirname(os.path.abspath(src))).strip()
                 logging.debug('git origin=%s',url)
             except subprocess.CalledProcessError as e:
                 raise DVSGitException("Cannot find git installation")
         obj = { HEXHASH: commit, GIT_SERVER_URL: url}
         self.add(which, obj=obj)
-
-    def add_s3_path(self, which, s3path, *, threads=1, extra=None):
-        """Add an s3 object, possibly hashing it.
-        :param which: should be COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
-        :param s3path: an S3 path (e.g. s3://bucket/path) of the object to add
-        :param extra:   additional key:value pairs to be added to the object
-        """
-        assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        obj = get_s3file_observation_with_remote_cache( s3path, search_endpoint=self.api_endpoint + API_V1[SEARCH], verify=self.verify)
-        if extra is not None:
-            assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
-            obj = {**obj, **extra}
-
-        self.add( which, obj = obj)
 
     def add_s3_paths(self, which, s3paths, *, threads=1, extra=None):
         """Add a set of s3 objects, possibly caching.
@@ -134,11 +122,18 @@ class DVS():
 
         """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        for s3path in s3paths:
-            self.add_s3_path( which, s3path)
+
+        s3objs = get_s3file_observations_with_remote_cache( s3paths, search_endpoint=self.api_endpoint + API_V1[SEARCH])
+        if extra is not None:
+            for s3obj in s3objs:
+                assert set.intersection(set(s3obj.keys()), set(extra.keys())) == set()
+            s3objs = [{**s3obj, **extra} for s3obj in s3objs]
+
+        for s3obj in s3objs:
+            self.add( which, obj = s3obj)
 
 
-    def add_s3_prefix(self, which, s3prefix, *, threads=1, page_size=100, extra=None):
+    def add_s3_prefix(self, which, s3prefix, *, threads=DEFAULT_THREADS, page_size=100, extra=None):
         """
         Add all of the s3 objects under a prefix. We get the objects to add, then send them all to add_s3_path,
         with the hope that it will be made multithreaded at some point
@@ -148,27 +143,28 @@ class DVS():
         :param page_size: how many objects to fetch at a time; 1000 was creating errors, so we moved to 100
         :param extra: a dictionary of additional metadata to add to each object being committed
         """
-        assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        import boto3
-        (bucket_name,prefix) = get_bucket_key(s3prefix)
-        paths = [f's3://{bucket_name}/{s3object.key}'
-                 for s3object in boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix)]
         self.add_s3_paths( which, paths, threads=threads, extra=extra )
 
 
-    def add_s3_paths_or_prefixes(self, which, s3pops, *, threads=1, extra=None):
+    def add_s3_paths_or_prefixes(self, which, s3pops, *, threads=DEFAULT_THREADS, extra=None):
         """Add a path or prefix from S3. If it is a prefix, add all it contains"""
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
+        import boto3
+        s3paths = []
         for s3pop in s3pops:
             if s3pop.endswith('/'):
-                return self.add_s3_prefix(which, s3pop, threads=threads, extra=extra)
+                (bucket_name,prefix) = get_bucket_key(s3pop)
+                paths = [f's3://{bucket_name}/{s3object.key}'
+                         for s3object in boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix)]
+                s3paths.extend(paths)
             else:
-                return self.add_s3_path(which, s3pop, extra=extra)
+                s3paths.append(s3pop)
+        return self.add_s3_paths(which, s3paths, threads=threads, extra=extra)
 
 
     def add_local_paths(self, which, paths, extra=None):
         """Add multiple paths using remote cache"""
-        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.api_endpoint + API_V1[SEARCH], 
+        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.api_endpoint + API_V1[SEARCH],
                                                             verify=self.verify)
         for obj in file_objs:
             if extra is not None:
