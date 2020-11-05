@@ -57,7 +57,7 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=True ):
                       FILENAME:  os.path.basename(key),
                       FILE_METADATA: {ST_SIZE  : s3obj.content_length,
                                       ST_MTIME : int(s3obj.last_modified.timestamp()),
-                                      ETAG     : etag},
+                                      ETAG     : s3obj.etag},
                       ID: 1
                   }}
 
