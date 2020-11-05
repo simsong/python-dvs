@@ -114,6 +114,20 @@ class DVS():
         obj = { HEXHASH: commit, GIT_SERVER_URL: url}
         self.add(which, obj=obj)
 
+    def add_s3_path(self, which, s3path, *, threads=1, extra=None):
+        """Add an s3 object, possibly hashing it.
+        :param which: should be COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
+        :param s3path: an S3 path (e.g. s3://bucket/path) of the object to add
+        :param extra:   additional key:value pairs to be added to the object
+        """
+        assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
+        obj = get_s3file_observation_with_remote_cache( s3path, search_endpoint=self.api_endpoint + API_V1[SEARCH], verify=self.verify)
+        if extra is not None:
+            assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
+            obj = {**obj, **extra}
+
+        self.add( which, obj = obj)
+
     def add_s3_paths(self, which, s3paths, *, threads=1, extra=None):
         """Add a set of s3 objects, possibly caching.
         :param which: should we COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
@@ -163,7 +177,8 @@ class DVS():
 
     def add_local_paths(self, which, paths, extra=None):
         """Add multiple paths using remote cache"""
-        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.api_endpoint + API_V1[SEARCH])
+        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.api_endpoint + API_V1[SEARCH],
+                                                            verify=self.verify)
         for obj in file_objs:
             if extra is not None:
                 assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
@@ -252,7 +267,7 @@ class DVS():
             dump_request[OFFSET] = offset
 
         data = {'dump':json.dumps(dump_request, default=str)}
-        r = requests.post(self.api_endpoint + API_V1[DUMP], data=data,verify=self.verify)
+        r = requests.post(self.api_endpoint + API_V1[DUMP], data=data, verify=self.verify)
         if r.status_code==HTTP_OK:
             return r.json()
         raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")

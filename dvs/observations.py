@@ -129,7 +129,7 @@ def get_s3file_observation_with_remote_cache(s3paths:list, *, search_endpoint:st
 
     # This is (annoyingly) still single-threaded. For each object, execute a search
     s3path_searches = dict()
-    if DVS_OBJECT_CACHE_ENV not in os.environ:
+    if DVS_OBJECT_CACHE_ENV in os.environ:
         logging.debug("Running with DVS_OBJECT_CACHE. Not checking server for cached hash.")
     else:
         for s3path in s3paths:

@@ -20,7 +20,7 @@ from dvs.dvs_constants import COMMIT_BEFORE,COMMIT_METHOD,COMMIT_AFTER
 
 
 def test_simple_commit():
-    dc = dvs.DVS()
+    dc = dvs.DVS(verify=False)
     with tempfile.NamedTemporaryFile(mode='w') as tf:
         tf.write(time.asctime()) # always different
         dc.add_local_paths( COMMIT_BEFORE, [tf.name] )
@@ -29,8 +29,8 @@ def test_simple_commit():
 
 
 def test_singleton():
-    d1 = dvs.DVS_Singleton()
-    d2 = dvs.DVS_Singleton()
+    d1 = dvs.DVS_Singleton(verify=False)
+    d2 = dvs.DVS_Singleton(verify=False)
 
     # Make sure it does DVS like things
     assert isinstance(d1.t0, float)
