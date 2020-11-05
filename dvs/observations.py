@@ -139,11 +139,11 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
             if objr:
                 s3path_searches[s3path] = objr
 
-
     # Still need to parallelize this.
     # Use the StreamingBody() to download the object.
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
     # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
+    # THis code is very similar to server_s3search above and should probably be factored into that.
 
     objs = []
     for s3path in s3paths:
@@ -159,7 +159,7 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
                     FILENAME: os.path.basename(key),
                     FILE_METADATA: {ST_SIZE  : s3obj.content_length,
                                     ST_MTIME : int(s3obj.last_modified.timestamp()),
-                                    ETAG     : etag},
+                                    ETAG     : s3obj.etag},
                     FILE_HASHES: hashes}
             objs.append(objr)
     return objs
