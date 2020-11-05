@@ -121,7 +121,7 @@ def get_s3file_observation_with_remote_cache(s3paths:list, *, search_endpoint:st
     # https://stackoverflow.com/questions/52402421/retrieving-etag-of-an-s3-object-using-boto3-client
 
     if not isinstance(s3paths, list):
-        raise ValueError(f"s3paths ({s3paths}) is a {type(s3path)} and not a list.")
+        raise ValueError(f"s3paths ({s3paths}) is a {type(s3paths)} and not a list.")
 
     # Get the ETag for all of the paths
     with Pool(threads) as p:
