@@ -99,7 +99,7 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=True ):
                 objr.get(FILE_METADATA,None)==file_metadata and
                 FILE_HASHES in objr):
 
-                logging.info("using hash from server for %s ",path)
+                logging.info("using hash from server for %s/%s %s ",dirname,filename,file_metadata)
 
                 # Take the old values, because it hasn't changed
                 return objr
