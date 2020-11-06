@@ -40,7 +40,7 @@ def get_s3path_etag(s3path):
         etag      = s3obj.e_tag
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code']=='404':
-            raise FileNotFoundError(path)
+            raise FileNotFoundError(s3path)
         abort
     # Annoying, S3 ETags come with quotes, which we will now remove. But perhaps one day they won't,
     # so check for the tag before removing it
