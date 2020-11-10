@@ -110,7 +110,7 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=True ):
 
 
 def hash_s3path(s3path:str):
-    """Called from Pool in get_s3file_observations_with_remote_cache, """
+    """Called from Pool in get_s3file_observations"""
     (bucket,key) = get_bucket_key(s3path)
     s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
     print(f"PID {os.getpid()} S3 Hashing s3://{bucket}/{key} {s3obj.content_length:,} bytes...",file=sys.stderr)
@@ -124,7 +124,7 @@ def hash_s3path(s3path:str):
             FILE_HASHES: hashes}
 
 
-def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:str, verify=True, threads=DEFAULT_THREADS):
+def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=True, threads=DEFAULT_THREADS):
     """Given an S3 path,
     1. Get the metadata from AWS for the object.
     2. Given this metadata, see if the object is registered in the DVS server.
@@ -148,7 +148,9 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
     # This is (annoyingly) still single-threaded. For each object, execute a search
     # We can just do a single search for all of them..
     s3path_searches = dict()
-    if DVS_OBJECT_CACHE_ENV in os.environ:
+    if search_endpoint is None:
+        logging.debug("Output files. will not use cache")
+    elif DVS_OBJECT_CACHE_ENV in os.environ:
         logging.debug("Running with DVS_OBJECT_CACHE. Not checking server for cached hash.")
     else:
         logging.info("Checking server for %s paths",len(s3paths))
@@ -178,9 +180,9 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
     return objs
 
 
-# Note: get_file_observations_with_remote_cache is similar to function above,
+# Note: get_file_observations is similar to function above,
 # except it pipelines multiple searches at once.
-def get_file_observations_with_remote_cache(paths:list, *, search_endpoint:str, verify=True):
+def get_file_observations(paths:list, *, search_endpoint:str, verify=True):
     """Create a list of file observations for a list of paths.
     1. Send the list of paths to the server and ask if the mtime for any of them are known
        We make a search_dictionary, which is the search object for each of the paths passed in,
@@ -194,9 +196,14 @@ def get_file_observations_with_remote_cache(paths:list, *, search_endpoint:str, 
     # Get the metadata for each path once.
     metadata_for_path = {path:json_stat(path) for path in paths}
 
-    if DVS_OBJECT_CACHE_ENV in os.environ:
+    if search_endpoint is None:
+        logging.debug("will not search")
+        results_by_path = {}
+
+    elif DVS_OBJECT_CACHE_ENV in os.environ:
         logging.debug("Will not search remote cache")
         results_by_path = {}
+
     else:
         logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
         search_dicts = {ct :

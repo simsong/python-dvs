@@ -9,7 +9,7 @@ import os
 
 from .dvs_constants import *
 from .dvs_helpers import objects_dict,canonical_json
-from .observations import get_s3file_observations_with_remote_cache,get_file_observations_with_remote_cache,get_bucket_key
+from .observations import get_s3file_observations, get_file_observations, get_bucket_key
 
 # This should be simplified to be a single API_ENDPOINT which handles v1/search v1/commit and v1/dump
 # And perhaps storage endpoint where files can just be dumped. The files are text files of JSON objects, one per line, in the format:
@@ -114,6 +114,16 @@ class DVS():
         obj = { HEXHASH: commit, GIT_SERVER_URL: url}
         self.add(which, obj=obj)
 
+    def get_search_endpoint(self, which):
+        """Returns the DVS server search endpoint, or None if we do not need to search (because these are output files)"""
+        if which==COMMIT_BEFORE or which==COMMIT_METHOD:
+            return self.api_endpoint + API_V1[SEARCH]
+        elif which==COMMIT_AFTER:
+            return None
+        else:
+            raise ValueError(f"which is {which} and not COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER")
+
+
     def add_s3_paths(self, which, s3paths, *, threads=1, extra=None):
         """Add a set of s3 objects, possibly caching.
         :param which: should we COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
@@ -121,9 +131,7 @@ class DVS():
         :param threads: how many threads to use. Currently ignored.
 
         """
-        assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-
-        s3objs = get_s3file_observations_with_remote_cache( s3paths, search_endpoint=self.api_endpoint + API_V1[SEARCH])
+        s3objs = get_s3file_observations( s3paths, search_endpoint = self.get_search_endpoint(which))
         if extra is not None:
             for s3obj in s3objs:
                 assert set.intersection(set(s3obj.keys()), set(extra.keys())) == set()
@@ -151,7 +159,9 @@ class DVS():
 
     def add_local_paths(self, which, paths, extra=None):
         """Add multiple paths using remote cache"""
-        file_objs = get_file_observations_with_remote_cache(paths, search_endpoint=self.api_endpoint + API_V1[SEARCH],
+
+        file_objs = get_file_observations(paths,
+                                                            search_endpoint =self.get_search_endpoint(which),
                                                             verify=self.verify)
         for obj in file_objs:
             if extra is not None:
