@@ -21,7 +21,7 @@ Routines for getting observations.
 from .dvs_constants import *
 from .dvs_helpers  import *
 
-DEFAULT_THREADS=40
+DEFAULT_THREADS=20
 
 def get_bucket_key(loc):
     """Given a location, return the (bucket,key)"""
@@ -109,7 +109,22 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=True ):
 
 
 
-def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:str, verify=True, threads=DEFAULT_THREADS):
+def hash_s3path(s3path:str):
+    """Called from Pool in get_s3file_observations"""
+    (bucket,key) = get_bucket_key(s3path)
+    s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
+    print(f"PID {os.getpid()} S3 Hashing s3://{bucket}/{key} {s3obj.content_length:,} bytes...",file=sys.stderr)
+    hashes = hash_filehandle(s3obj.get()['Body'])
+    return {HOSTNAME: DVS_S3_PREFIX + bucket,
+            DIRNAME:  os.path.dirname(key),
+            FILENAME: os.path.basename(key),
+            FILE_METADATA: {ST_SIZE  : s3obj.content_length,
+                            ST_MTIME : int(s3obj.last_modified.timestamp()),
+                            ETAG     : s3obj.e_tag},
+            FILE_HASHES: hashes}
+
+
+def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=True, threads=DEFAULT_THREADS):
     """Given an S3 path,
     1. Get the metadata from AWS for the object.
     2. Given this metadata, see if the object is registered in the DVS server.
@@ -125,19 +140,26 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
         raise ValueError(f"s3paths ({s3paths}) is a {type(s3paths)} and not a list.")
 
     # Get the ETag for all of the paths
+    print(__file__ + " are we here?",file=sys.stderr)
+    logging.info("getting tags for %s paths",len(s3paths))
     with Pool(threads) as p:
         s3path_etags = dict(p.map(get_s3path_etag, s3paths))
 
     # This is (annoyingly) still single-threaded. For each object, execute a search
+    # We can just do a single search for all of them..
     s3path_searches = dict()
-    if DVS_OBJECT_CACHE_ENV in os.environ:
+    if search_endpoint is None:
+        logging.debug("Output files. will not use cache")
+    elif DVS_OBJECT_CACHE_ENV in os.environ:
         logging.debug("Running with DVS_OBJECT_CACHE. Not checking server for cached hash.")
     else:
+        logging.info("Checking server for %s paths",len(s3paths))
         for s3path in s3paths:
             objr =  server_s3search(s3path=s3path, s3path_etag=s3path_etags[s3path],
                                     search_endpoint=search_endpoint, verify=verify)
             if objr:
                 s3path_searches[s3path] = objr
+        logging.info("Got response on %s",len(s3path_searches))
 
     # Still need to parallelize this.
     # Use the StreamingBody() to download the object.
@@ -145,29 +167,22 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
     # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
     # THis code is very similar to server_s3search above and should probably be factored into that.
 
-    objs = []
-    for s3path in s3paths:
-        if s3path in s3path_searches:
-            objs.append(s3path_searches[s3path])
-        else:
-            (bucket,key) = get_bucket_key(s3path)
-            s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
-            print("S3 Hashing s3://{}/{} {:,} bytes...".format(bucket,key,s3obj.content_length),file=sys.stderr)
-            hashes = hash_filehandle(s3obj.get()['Body'])
-            objr = {HOSTNAME: DVS_S3_PREFIX + bucket,
-                    DIRNAME:  os.path.dirname(key),
-                    FILENAME: os.path.basename(key),
-                    FILE_METADATA: {ST_SIZE  : s3obj.content_length,
-                                    ST_MTIME : int(s3obj.last_modified.timestamp()),
-                                    ETAG     : s3obj.e_tag},
-                    FILE_HASHES: hashes}
-            objs.append(objr)
+    # get the objects for the s3paths that we had
+    objs            = [s3path_searches[s3path] for s3path in s3paths if s3path in s3path_searches]
+    s3paths_to_hash = [s3path for s3path in s3paths if s3path not in s3path_searches]
+
+    # hash the s3paths that aren't
+
+    logging.info("Parallel hashing of %s files",len(s3paths_to_hash))
+    with Pool(threads) as p:
+        objs.extend( p.map(hash_s3path, s3paths_to_hash ))
+
     return objs
 
 
-# Note: get_file_observations_with_remote_cache is similar to function above,
+# Note: get_file_observations is similar to function above,
 # except it pipelines multiple searches at once.
-def get_file_observations_with_remote_cache(paths:list, *, search_endpoint:str, verify=True):
+def get_file_observations(paths:list, *, search_endpoint:str, verify=True):
     """Create a list of file observations for a list of paths.
     1. Send the list of paths to the server and ask if the mtime for any of them are known
        We make a search_dictionary, which is the search object for each of the paths passed in,
@@ -181,9 +196,14 @@ def get_file_observations_with_remote_cache(paths:list, *, search_endpoint:str, 
     # Get the metadata for each path once.
     metadata_for_path = {path:json_stat(path) for path in paths}
 
-    if DVS_OBJECT_CACHE_ENV in os.environ:
+    if search_endpoint is None:
+        logging.debug("will not search")
+        results_by_path = {}
+
+    elif DVS_OBJECT_CACHE_ENV in os.environ:
         logging.debug("Will not search remote cache")
         results_by_path = {}
+
     else:
         logging.debug("Searching to see if dirname, filename, and mtime is known for any of our commits")
         search_dicts = {ct :
