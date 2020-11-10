@@ -21,7 +21,7 @@ Routines for getting observations.
 from .dvs_constants import *
 from .dvs_helpers  import *
 
-DEFAULT_THREADS=40
+DEFAULT_THREADS=20
 
 def get_bucket_key(loc):
     """Given a location, return the (bucket,key)"""
@@ -140,6 +140,8 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
         raise ValueError(f"s3paths ({s3paths}) is a {type(s3paths)} and not a list.")
 
     # Get the ETag for all of the paths
+    print(__file__ + " are we here?",file=sys.stderr)
+    logging.info("getting tags for %s paths",len(s3paths))
     with Pool(threads) as p:
         s3path_etags = dict(p.map(get_s3path_etag, s3paths))
 
@@ -149,11 +151,13 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
     if DVS_OBJECT_CACHE_ENV in os.environ:
         logging.debug("Running with DVS_OBJECT_CACHE. Not checking server for cached hash.")
     else:
+        logging.info("Checking server for %s paths",len(s3paths))
         for s3path in s3paths:
             objr =  server_s3search(s3path=s3path, s3path_etag=s3path_etags[s3path],
                                     search_endpoint=search_endpoint, verify=verify)
             if objr:
                 s3path_searches[s3path] = objr
+        logging.info("Got response on %s",len(s3path_searches))
 
     # Still need to parallelize this.
     # Use the StreamingBody() to download the object.
@@ -167,6 +171,7 @@ def get_s3file_observations_with_remote_cache(s3paths:list, *, search_endpoint:s
 
     # hash the s3paths that aren't
 
+    logging.info("Parallel hashing of %s files",len(s3paths_to_hash))
     with Pool(threads) as p:
         objs.extend( p.map(hash_s3path, s3paths_to_hash ))
 
