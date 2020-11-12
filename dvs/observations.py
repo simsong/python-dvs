@@ -140,7 +140,6 @@ def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=True, t
         raise ValueError(f"s3paths ({s3paths}) is a {type(s3paths)} and not a list.")
 
     # Get the ETag for all of the paths
-    print(__file__ + " are we here?",file=sys.stderr)
     logging.info("getting tags for %s paths",len(s3paths))
     with Pool(threads) as p:
         s3path_etags = dict(p.map(get_s3path_etag, s3paths))
