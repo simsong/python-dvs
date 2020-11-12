@@ -29,6 +29,9 @@ class DVSException(Exception):
 class DVSGitException(DVSException):
     pass
 
+class DVSServerError(DVSException):
+    pass
+
 class DVS_Singleton:
     """The Python singleton pattern. There are many singleton objects,
     but they all reference the same embedded object,
@@ -237,7 +240,7 @@ class DVS():
                           verify=self.verify)
         logging.debug("response: %s",r)
         if r.status_code!=HTTP_OK:
-            raise RuntimeError(f"Error from server: {r.status_code}: {r.text}")
+            raise DVSServerError(f"Error from server: {r.status_code}: {r.text}")
 
         # Return the commit object
         return r.json()
