@@ -126,27 +126,43 @@ def search_api(auth):
 
 
 
+# https://stackoverflow.com/questions/3415072/pythonic-way-to-iterate-over-sequence-4-items-at-a-time
+def grouper(n, iterable, fillvalue=None):
+    "grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx"
+
+    from itertools import zip_longest
+    args = [iter(iterable)] * n
+    return zip_longest(fillvalue=fillvalue, *args)
+
+
 def store_objects(auth,objects):
     """Objects is a dictionary of key:values that will be stored. The value might be a URL or a dictionary"""
+
     assert isinstance(objects,dict)
     if len(objects)==0:
         return
-    vals = []
-    for (key,val) in objects.items():
-        if isinstance(val,dict):
-            # we were given an object to store
-            val_json = canonical_json( val )
-            assert key == hexhash_string( val_json )
-            vals.append(key)
-            vals.append(val_json)
-            vals.append(None)
-        elif isinstance(val,str):
-            # we were given a URL to store
-            vals.append(key)
-            vals.append(None)
-            vals.append(val)
-    dbfile.DBMySQL.csfr(auth,"INSERT IGNORE INTO dvs_objects (hexhash,object,url) VALUES "
-                        + comma_args(3,rows=len(objects),parens=True), vals)
+    # Group inserts to maximum of 10 objects
+    OBJECTS_PER_INSERT = 10
+    for keys in grouper( OBJECTS_PER_INSERT ,  objects.keys()):
+        vals = []
+        for key in keys:
+            if key is None:
+                continue
+            val = objects[key]
+            if isinstance(val,dict):
+                # we were given an object to store
+                val_json = canonical_json( val )
+                assert key == hexhash_string( val_json )
+                vals.append(key)
+                vals.append(val_json)
+                vals.append(None)
+            elif isinstance(val,str):
+                # we were given a URL to store
+                vals.append(key)
+                vals.append(None)
+                vals.append(val)
+        dbfile.DBMySQL.csfr(auth,"INSERT IGNORE INTO dvs_objects (hexhash,object,url) VALUES "
+                            + comma_args(3,rows=len(objects),parens=True), vals)
 
 def get_objects(auth,hexhashes):
     """Returns the objects for the hexhashes. If the hexhash is a url, returns a proxy (which is a string, rather than an object)"""
