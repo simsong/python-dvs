@@ -216,10 +216,10 @@ class DVS():
             # https://github.com/boto/boto3/issues/894
             boto3.set_stream_logger('boto3.resources', logging.INFO, format_string='%(message).1600s')
             from urllib.parse import urlparse
-            from hashlib import md5
+            from hashlib import sha1
+
             data_bytes = canonical_json(data).encode('utf-8')
-            print("len(data_bytes)=",len(data_bytes))
-            m = md5()
+            m = sha1()
             m.update(data_bytes)
             hexhash = m.hexdigest()
             url = os.environ[DVS_OBJECT_CACHE_ENV]+'/'+hexhash
