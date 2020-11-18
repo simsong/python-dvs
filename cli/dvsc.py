@@ -164,7 +164,7 @@ def print_graph(objs):
 
 def print_last(objs):
     for obj in objs:
-        print(obj2line(c, shortest_prefix_for_objects(objs)))
+        print(obj2line(obj, shortest_prefix_for_objects(objs)))
 
 def render_search_result(search_results):
     search_str = search_results['search']['*']
