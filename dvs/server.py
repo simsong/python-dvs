@@ -285,7 +285,7 @@ def commit_api(auth):
         return f"commit parameter is not a valid JSON value"
 
     error_message = validate_commit(commit, objects)
-    if error_messsage:
+    if error_messsgae:
         bottle.response.status = 400
         return error_message
 
