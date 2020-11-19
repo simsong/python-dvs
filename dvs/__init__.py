@@ -240,7 +240,7 @@ class DVS():
                           verify=self.verify)
         logging.debug("response: %s",r)
         if r.status_code!=HTTP_OK:
-            raise RuntimeError(f"Error from server: {r.status_code}: {r.text}")
+            raise DVSServerError(f"Error from server: {r.status_code}: {r.text}")
 
         # Return the commit object
         return r.json()
@@ -257,7 +257,7 @@ class DVS():
         r = requests.post(self.api_endpoint + API_V1[DUMP], data=data, verify=self.verify)
         if r.status_code==HTTP_OK:
             return r.json()
-        raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
+        raise DVSServerError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
 
     def search(self, search_list):
         data = {'searches':json.dumps(search_list, default=str)}
@@ -265,7 +265,7 @@ class DVS():
         logging.debug("status=%s text: %s",r.status_code, r.text)
         if r.status_code==HTTP_OK:
             return r.json()
-        raise RuntimeError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
+        raise DVSServerError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
 
 
 """
