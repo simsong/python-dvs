@@ -29,6 +29,9 @@ class DVSException(Exception):
 class DVSGitException(DVSException):
     pass
 
+class DVSServerError(DVSException):
+    pass
+
 class DVS_Singleton:
     """The Python singleton pattern. There are many singleton objects,
     but they all reference the same embedded object,
