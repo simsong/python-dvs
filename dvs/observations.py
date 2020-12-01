@@ -48,7 +48,7 @@ def get_s3path_etag(s3path):
         etag = etag[1:-1]
     return (s3path, etag)
 
-def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=True ):
+def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=DEFAULT_VERIFY ):
     (bucket,key) = get_bucket_key(s3path)
     s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
     search_dicts = {1 :
@@ -124,7 +124,7 @@ def hash_s3path(s3path:str):
             FILE_HASHES: hashes}
 
 
-def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=True, threads=DEFAULT_THREADS):
+def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=DEFAULT_VERIFY, threads=DEFAULT_THREADS):
     """Given an S3 path,
     1. Get the metadata from AWS for the object.
     2. Given this metadata, see if the object is registered in the DVS server.
@@ -155,7 +155,7 @@ def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=True, t
         logging.info("Checking server for %s paths",len(s3paths))
         for s3path in s3paths:
             objr =  server_s3search(s3path=s3path, s3path_etag=s3path_etags[s3path],
-                                    search_endpoint=search_endpoint, verify=verify)
+                                    search_endpoint=search_endpoint, verify=DEFAULT_VERIFY)
             if objr:
                 s3path_searches[s3path] = objr
         logging.info("Got response on %s",len(s3path_searches))
@@ -181,7 +181,7 @@ def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=True, t
 
 # Note: get_file_observations is similar to function above,
 # except it pipelines multiple searches at once.
-def get_file_observations(paths:list, *, search_endpoint:str, verify=True):
+def get_file_observations(paths:list, *, search_endpoint:str, verify=DEFAULT_VERIFY):
     """Create a list of file observations for a list of paths.
     1. Send the list of paths to the server and ask if the mtime for any of them are known
        We make a search_dictionary, which is the search object for each of the paths passed in,

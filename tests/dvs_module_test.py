@@ -16,11 +16,11 @@ Test the dvs module
 from os.path import dirname, abspath, basename
 sys.path.append( dirname(dirname( abspath( __file__ ) )))
 import dvs
-from dvs.dvs_constants import COMMIT_BEFORE,COMMIT_METHOD,COMMIT_AFTER
+from dvs.dvs_constants import COMMIT_BEFORE,COMMIT_METHOD,COMMIT_AFTER,DEFAULT_VERIFY
 
 
 def test_simple_commit():
-    dc = dvs.DVS(verify=False)
+    dc = dvs.DVS(verify=DEFAULT_VERIFY)
     with tempfile.NamedTemporaryFile(mode='w') as tf:
         tf.write(time.asctime()) # always different
         dc.add_local_paths( COMMIT_BEFORE, [tf.name] )
@@ -29,8 +29,8 @@ def test_simple_commit():
 
 
 def test_singleton():
-    d1 = dvs.DVS_Singleton(verify=False)
-    d2 = dvs.DVS_Singleton(verify=False)
+    d1 = dvs.DVS_Singleton(verify=DEFAULT_VERIFY)
+    d2 = dvs.DVS_Singleton(verify=DEFAULT_VERIFY)
 
     # Make sure it does DVS like things
     assert isinstance(d1.t0, float)

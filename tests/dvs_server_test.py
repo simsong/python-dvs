@@ -38,7 +38,7 @@ def dbwriter_auth():
 def test_store_objects(dbwriter_auth):
     """Make three objects, store them, and see if we can get them back."""
     if not dbwriter_auth:
-        warnings.warn("DVS Server not available")
+        warnings.warn("dbwriter_auth is None; cannot test DVS server functions")
         return
     warnings.filterwarnings("ignore", module="pymysql.cursors")
     warnings.filterwarnings("ignore", module="bottle")
@@ -61,7 +61,7 @@ def test_store_objects(dbwriter_auth):
 def test_store_commit(dbwriter_auth):
     """Store a file update for a single file in the database"""
     if not dbwriter_auth:
-        warnings.warn("DVS Server not available")
+        warnings.warn("dbwriter_auth is None; cannot test DVS server functions")
         return
     warnings.filterwarnings("ignore", module="pymysql.cursors")
     warnings.filterwarnings("ignore", module="bottle")

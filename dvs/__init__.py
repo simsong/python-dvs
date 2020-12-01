@@ -16,6 +16,7 @@ from .observations import get_s3file_observations, get_file_observations, get_bu
 # hexhash,<<JSON_OBJECT>>\n
 
 API_ENDPOINT = "https://dasexperimental.ite.ti.census.gov/api/dvs"
+DEFAULT_TIMEOUT = 5.0
 
 # these get added to the endpoint
 API_V1 = {SEARCH:"/v1/search",
@@ -32,6 +33,9 @@ class DVSGitException(DVSException):
 class DVSServerError(DVSException):
     pass
 
+class DVSServerTimeout(DVSServerError):
+    pass
+
 class DVS_Singleton:
     """The Python singleton pattern. There are many singleton objects,
     but they all reference the same embedded object,
@@ -45,7 +49,7 @@ class DVS_Singleton:
         return getattr(DVS_Singleton.instance, name)
 
 class DVS():
-    def __init__(self, base=None, api_endpoint=None, verify=True, debug=False, ACL=None):
+    def __init__(self, base=None, api_endpoint=None, verify=DEFAULT_VERIFY, debug=False, ACL=None, timeout=DEFAULT_TIMEOUT):
         """Start a DVS transaction"""
         self.the_commit    = base if base is not None else {}
         self.file_obj_dict = {} # where the file objects will end up
@@ -53,6 +57,7 @@ class DVS():
         self.t0            = time.time()
         self.verify        = verify
         self.debug         = debug
+        self.timeout       = timeout
         self.COMMIT_BEFORE = COMMIT_BEFORE
         self.COMMIT_AFTER  = COMMIT_AFTER
         self.COMMIT_METHOD = COMMIT_METHOD
@@ -90,7 +95,6 @@ class DVS():
         if which not in self.file_obj_dict:
             self.file_obj_dict[which] = list()
         self.file_obj_dict[which].append(obj)
-
 
     def add_git_commit(self, *, which=COMMIT_METHOD, url=None, commit=None, src=None):
         logging.debug('=== add_git_commit')
@@ -164,8 +168,8 @@ class DVS():
         """Add multiple paths using remote cache"""
 
         file_objs = get_file_observations(paths,
-                                                            search_endpoint =self.get_search_endpoint(which),
-                                                            verify=self.verify)
+                                          search_endpoint =self.get_search_endpoint(which),
+                                          verify=self.verify)
         for obj in file_objs:
             if extra is not None:
                 assert set.intersection(set(obj.keys()), set(extra.keys())) == set()
@@ -235,9 +239,15 @@ class DVS():
 
 
         # Send the objects and the commit
-        r = requests.post(self.api_endpoint + API_V1[COMMIT],
-                          data=data,
-                          verify=self.verify)
+        try:
+            commit_url = self.api_endpoint + API_V1[COMMIT]
+            r = requests.post(commit_url,
+                              data=data,
+                              verify=self.verify,
+                              timeout = self.timeout)
+        except requests.exceptions.Timeout:
+            raise DVSServerTimeout(commit_url)
+
         logging.debug("response: %s",r)
         if r.status_code!=HTTP_OK:
             raise DVSServerError(f"Error from server: {r.status_code}: {r.text}")
@@ -254,14 +264,23 @@ class DVS():
             dump_request[OFFSET] = offset
 
         data = {'dump':json.dumps(dump_request, default=str)}
-        r = requests.post(self.api_endpoint + API_V1[DUMP], data=data, verify=self.verify)
+        try:
+            dump_url = self.api_endpoint + API_V1[DUMP]
+            r = requests.post(dump_url, data=data, verify=self.verify, timeout=self.timeout)
+        except requests.exceptions.Timeout as e:
+            raise DVSServerTimeout(dump_url)
         if r.status_code==HTTP_OK:
             return r.json()
         raise DVSServerError(f"Error on backend: result={r.status_code}  note:\n{r.text}")
 
     def search(self, search_list):
         data = {'searches':json.dumps(search_list, default=str)}
-        r = requests.post(self.api_endpoint + API_V1[SEARCH], data=data, verify=self.verify)
+        try:
+            search_url = self.api_endpoint + API_V1[SEARCH]
+            r = requests.post(search_url, data=data, verify=self.verify, timeout=self.timeout)
+        except requests.exceptions.Timeout as e:
+            raise DVSServerTimeout(search_url)
+
         logging.debug("status=%s text: %s",r.status_code, r.text)
         if r.status_code==HTTP_OK:
             return r.json()
