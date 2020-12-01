@@ -12,6 +12,7 @@ import json
 import warnings
 import time
 import logging
+import socket
 
 ###
 # Get 'ctools' into the path.
