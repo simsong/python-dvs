@@ -20,8 +20,23 @@ Routines for getting observations.
 
 from .dvs_constants import *
 from .dvs_helpers  import *
+from .server import MAX_SEARCH_OBJECTS
+from .exceptions import DVSServerError
+from .dvs_helpers import dvs_debug_obj_str
+
 
 DEFAULT_THREADS=20
+MAX_DEBUG_PRINT=260
+CACHE_CHECK_S3_MIN_FILE_SIZE    = 16*1024*1024 # if the file is smaller than 16MiB, don't check the server
+CACHE_CHECK_LOCAL_MIN_FILE_SIZE = 64*1024*1024 # if the file is smaller than 64MiB, don't check the server
+
+def debug_str(s):
+    """Return s if smaller than MAX_DEBUG_PRINT , otherwise print something more understandable"""
+    s = str(s)
+    if len(s) < MAX_DEBUG_PRINT:
+        return s
+    return f"{s[0:MAX_DEBUG_PRINT -30]} ... ({len(s):,} chars) ... {s[-30:]}"
+
 
 def get_bucket_key(loc):
     """Given a location, return the (bucket,key)"""
@@ -32,23 +47,51 @@ def get_bucket_key(loc):
     assert ValueError("{} is not an s3 location".format(loc))
 
 
-def get_s3path_etag(s3path):
-    """Given an s3path, return a tuple of (s3path, ETag). Designed to be parallelized"""
+def get_s3path_etag_bytes(s3path):
+    """Given an s3path, return a tuple of (s3path, ETag, bytes). Designed to be parallelized"""
     (bucket,key) = get_bucket_key(s3path)
     s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
     try:
-        etag      = s3obj.e_tag
+        etag     = s3obj.e_tag
+        obytes   = s3obj.content_length
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code']=='404':
             raise FileNotFoundError(s3path)
-        abort
+        raise(e)
     # Annoying, S3 ETags come with quotes, which we will now remove. But perhaps one day they won't,
     # so check for the tag before removing it
     if etag[0] == '"':
         etag = etag[1:-1]
-    return (s3path, etag)
+    return (s3path, etag, s3obj.content_length)
 
-def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=DEFAULT_VERIFY ):
+
+def server_search_post(*, search_endpoint, search_dicts, verify=DEFAULT_VERIFY):
+    """Actually performs the server search. Handles search_dicts>server.MAX_SEARCH_OBJECTS"""
+    # For testing, use a stride of 5
+    MAX_SEARCH_OBJECTS=5
+    return_list = []
+    search_dict_values = list(search_dicts.values())
+    for stride in range(0, len(search_dict_values), MAX_SEARCH_OBJECTS):
+        stride_dicts = search_dict_values[stride:stride+MAX_SEARCH_OBJECTS]
+        logging.debug("Search send: %d/%d%s", stride, len(search_dict_values), debug_str(stride_dicts))
+        print(json.dumps(stride_dicts))
+        r = requests.post(search_endpoint,
+                          data = {'searches':json.dumps(stride_dicts, default=str)},
+                          verify = verify)
+        logging.debug(f"Return. r.status_code={r.status_code} len(r.text)={len(r.text)}")
+        if r.status_code!=HTTP_OK:
+            raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+        try:
+            return_list.extend(r.json())
+        except json.decoder.JSONDecodeError as e:
+            print("Invalid response from server for search request: ",r,file=sys.stderr)
+            raise DVSServerError()
+    logging.debug("Search server objects returned: %d",len(return_list))
+    for obj in return_list:
+        logging.debug("   %s",obj)
+    return return_list
+
+def server_s3search(*, s3path, s3path_etag, search_endpoint, verify=DEFAULT_VERIFY ):
     (bucket,key) = get_bucket_key(s3path)
     s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
     search_dicts = {1 :
@@ -62,18 +105,12 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=DEFAULT_VERIF
                   }}
 
     # Now we want to send all of the objects to the server as a list
-    logging.debug("Search send: %s",str(search_dicts))
-    r = requests.post(search_endpoint,
-                      data={'searches':json.dumps(list(search_dicts.values()), default=str)},
-                      verify=verify)
-    if r.status_code!=HTTP_OK:
-        raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+    logging.debug("Search send: %s",debug_str(search_dicts))
+    rjson = server_search_post(search_endopint = search_endpoint,
+                               search_dicts = search_dicts,
+                               verify = verify)
 
-    try:
-        results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in r.json()}
-    except json.decoder.JSONDecodeError as e:
-        print("Invalid response from server for search request: ",r,file=sys.stderr)
-        raise RuntimeError
+    results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in rjson}
 
 
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
@@ -104,7 +141,7 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=DEFAULT_VERIF
                 # Take the old values, because it hasn't changed
                 return objr
             else:
-                logging.debug("Not in %s",result)
+                logging.debug("Not in %s",debug_str(result))
     return None
 
 
@@ -142,10 +179,12 @@ def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=DEFAULT
     # Get the ETag for all of the paths
     logging.info("getting tags for %s paths",len(s3paths))
     with Pool(threads) as p:
-        s3path_etags = dict(p.map(get_s3path_etag, s3paths))
+        rows = p.map(get_s3path_etag_bytes, s3paths)
+    s3path_etags = {row[0]:row[1] for row in rows} # make paths to etags
+    s3path_content_lengths = {row[0]:row[1] for row in rows} # make paths to content-lengths
 
     # This is (annoyingly) still single-threaded. For each object, execute a search
-    # We can just do a single search for all of them..
+    # We could just do a single search for all of them..
     s3path_searches = dict()
     if search_endpoint is None:
         logging.debug("Output files. will not use cache")
@@ -154,10 +193,11 @@ def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=DEFAULT
     else:
         logging.info("Checking server for %s paths",len(s3paths))
         for s3path in s3paths:
-            objr =  server_s3search(s3path=s3path, s3path_etag=s3path_etags[s3path],
-                                    search_endpoint=search_endpoint, verify=DEFAULT_VERIFY)
-            if objr:
-                s3path_searches[s3path] = objr
+            if s3path[s3path_content_lengths] > CACHE_CHECK_S3_MIN_FILE_SIZE:
+                objr =  server_s3search(s3path=s3path, s3path_etag=s3path_etags[s3path],
+                                        search_endpoint=search_endpoint, verify=DEFAULT_VERIFY)
+                if objr:
+                    s3path_searches[s3path] = objr
         logging.info("Got response on %s",len(s3path_searches))
 
     # Still need to parallelize this.
@@ -189,6 +229,7 @@ def get_file_observations(paths:list, *, search_endpoint:str, verify=DEFAULT_VER
     2. Hash the files that are not known to the server.
     3. Return the list of observation objects.
     """
+    logging.debug("paths 1: %s",paths)
     assert isinstance(paths,list)
     assert all([isinstance(path,str) for path in paths])
 
@@ -212,25 +253,21 @@ def get_file_observations(paths:list, *, search_endpoint:str, verify=DEFAULT_VER
                           FILENAME: os.path.basename(path),
                           FILE_METADATA: metadata_for_path[path],
                           ID : ct }
-                    for (ct,path) in enumerate(paths)}
+                        for (ct,path) in enumerate(paths)
+                        if metadata_for_path[path][ST_SIZE] > CACHE_CHECK_LOCAL_MIN_FILE_SIZE}
         results_by_searchid = {}
 
         # Now we want to send all of the objects to the server as a list
-        logging.debug("Search send: %s",str(search_dicts))
-        r = requests.post(search_endpoint,
-                          data={'searches':json.dumps(list(search_dicts.values()), default=str)},
-                          verify=verify)
-        if r.status_code!=HTTP_OK:
-            raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
 
-        try:
-            results_by_path = {response[SEARCH][PATH] : response[RESULTS] for response in r.json()}
-        except json.decoder.JSONDecodeError as e:
-            print("Invalid response from server for search request: ",r,file=sys.stderr)
+        rjson = server_search_post(search_endpoint=search_endpoint,
+                                   search_dicts=search_dicts,
+                                   verify=verify)
+        results_by_path = {response[SEARCH][PATH] : response[RESULTS] for response in rjson}
 
 
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
     file_objs = []
+    logging.debug("paths: %s",paths)
     for path in paths:
         obj = None
         if path in results_by_path:
@@ -244,6 +281,7 @@ def get_file_observations(paths:list, *, search_endpoint:str, verify=DEFAULT_VER
                     FILE_HASHES in objr):
                     logging.info("using hash from server for %s ",path)
                     obj = {**objr, **get_file_observation(path)}
+                logging.debug("does not match %s",dvs_debug_obj_str(objr))
         if obj is None:
             logging.debug("Could not find hash; hashing file")
             obj = get_file_observation_with_hash(path)

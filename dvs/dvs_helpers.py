@@ -171,3 +171,7 @@ def length_of_unique_prefix(hexhashes) -> int:
         if check_length_is_unique_prefix(hexhashes,length):
             return length
     raise RuntimeError("We should not reach here")
+
+def dvs_debug_obj_str(obj):
+    """For debugging, return a subjset of the object"""
+    return f"{obj.get('dirname','')}/{obj.get('filename','')}  {obj.get('hashes',{}).get('sha1','')}"
