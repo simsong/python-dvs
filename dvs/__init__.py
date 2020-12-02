@@ -25,9 +25,9 @@ if >1000 objects are present in a before or after, a group commit needs to be cr
 """
 
 from .dvs_constants import *
-from .dvs_helpers import objects_dict,canonical_json
-from .observations import get_s3file_observations, get_file_observations, get_bucket_key
-from .exceptions import *
+from .dvs_helpers   import objects_dict,canonical_json
+from .observations  import get_s3file_observations, get_file_observations, get_bucket_key
+from .exceptions    import *
 
 # This should be simplified to be a single API_ENDPOINT which handles v1/search v1/commit and v1/dump
 # And perhaps storage endpoint where files can just be dumped. The files are text files of JSON objects, one per line, in the format:

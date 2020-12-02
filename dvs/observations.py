@@ -63,6 +63,7 @@ def get_s3path_etag(s3path):
 def server_search_post(*, search_endpoint, search_dicts, verify=DEFAULT_VERIFY):
     """Actually performs the server search. Handles search_dicts>server.MAX_SEARCH_OBJECTS"""
     assert len(search_dicts) < MAX_SEARCH_OBJECTS
+    logging.debug("Search send: %s",debug_str(search_dicts))
     r = requests.post(search_endpoint,
                       data = {'searches':json.dumps(list(search_dicts.values()), default=str)},
                       verify = verify)
@@ -237,17 +238,11 @@ def get_file_observations(paths:list, *, search_endpoint:str, verify=DEFAULT_VER
         results_by_searchid = {}
 
         # Now we want to send all of the objects to the server as a list
-        logging.debug("Search send: %s",debug_str(search_dicts))
-        r = requests.post(search_endpoint,
-                          data={'searches':json.dumps(list(search_dicts.values()), default=str)},
-                          verify=verify)
-        if r.status_code!=HTTP_OK:
-            raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
 
-        try:
-            results_by_path = {response[SEARCH][PATH] : response[RESULTS] for response in r.json()}
-        except json.decoder.JSONDecodeError as e:
-            print("Invalid response from server for search request: ",r,file=sys.stderr)
+        rjson = server_search_post(search_endpoint=search_endpoint,
+                                   search_dicts=search_dicts,
+                                   verify=verify)
+        results_by_path = {response[SEARCH][PATH] : response[RESULTS] for response in rjson}
 
 
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
