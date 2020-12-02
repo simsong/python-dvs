@@ -7,6 +7,7 @@ The goal here is to avoid having quoted constants in the source code
 
 HTTP_OK=200
 DEFAULT_THREADS=40
+DEFAULT_VERIFY=True             # for https
 
 DVS_S3_PREFIX='s3://'
 
