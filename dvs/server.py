@@ -31,6 +31,9 @@ from .dvs_helpers import is_hexadecimal,canonical_json,hexhash_string,comma_args
 ###
 
 
+MAX_DUMP_OBJECTS   = 1000
+MAX_SEARCH_OBJECTS = 1000
+
 def do_v2search(auth, *, search, debug=False):
     """Implements the low-level v2 search. This will change when we move to GraphQL.
     Currently the search is a dictionary that is matched against. The special wildcard SEARCH_ANY
@@ -114,9 +117,13 @@ def search_api(auth):
     if not isinstance(searches,list):
         bottle.response.status = 404
         return f"Searches parameter must be a JSON-encoded list"
+    if len(searches)>MAX_SEARCH_OBJECTS:
+        bottle.response.status = 404
+        return f"Search requested {len(searches)} objects; max is {MAX_SEARCH_OBJECTS}";
     if any([isinstance(obj,dict) is False for obj in searches]):
         bottle.response.status = 404
         return f"Searches parameter must be a JSON-encoded list of dictionaries"
+
     responses = [{SEARCH:search,
                  RESULTS:do_v2search(auth,search=search, debug=bottle.request.params.debug)}
                  for search in searches]
@@ -220,13 +227,14 @@ other methods return lists of objects
     return objects
 
 
-def dump_objects(auth,limit,offset):
+def dump_objects(auth, limit, offset):
     """Returns objects from offset..limit, in reverse order. If offset is NULL, start at the last"""
     cmd = "SELECT hexhash,created,JSON_UNQUOTE(object) as object,url from dvs_objects order by objectid desc "
     vals = []
-    if limit:
-        cmd += " LIMIT %s "
-        vals.append(limit)
+    if (limit is None) or (limit>MAX_DUMP_OBJECTS):
+        limit = MAX_DUMP_OBJECTS
+    cmd += " LIMIT %s "
+    vals.append(limit)
     if offset:
         cmd += " OFFSET %s "
         vals.append(offset)
