@@ -25,7 +25,7 @@ if >1000 objects are present in a before or after, a group commit needs to be cr
 """
 
 from .dvs_constants import *
-from .dvs_helpers   import objects_dict,canonical_json
+from .dvs_helpers   import objects_dict,canonical_json,dvs_debug_obj_str
 from .observations  import get_s3file_observations, get_file_observations, get_bucket_key
 from .exceptions    import *
 
@@ -40,10 +40,6 @@ DEFAULT_TIMEOUT = 5.0
 API_V1 = {SEARCH:"/v1/search",
           COMMIT:"/v1/commit",
           DUMP:"/v1/dump" }
-
-def dvs_debug_obj_str(obj):
-    """For debugging, return a subjset of the object"""
-    return f"{obj.get('dirname','')}/{obj.get('filename','')}  {obj.get('hashes',{}).get('sha1','')}"
 
 class DVS_Singleton:
     """The Python singleton pattern. There are many singleton objects,
@@ -176,6 +172,8 @@ class DVS():
     def add_local_paths(self, which, paths, extra=None):
         """Add multiple paths using remote cache"""
 
+        # Get full path name for every file
+        paths = [os.path.abspath(p) for p in paths]
         file_objs = get_file_observations(paths,
                                           search_endpoint =self.get_search_endpoint(which),
                                           verify=self.verify)
