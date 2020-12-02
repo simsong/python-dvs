@@ -31,7 +31,7 @@ def debug_str(s):
     s = str(s)
     if len(s) < MAX_DEBUG_PRINT:
         return s
-    return f"{s[0:MAX_DEBUG_PRINT -30]} ... ({len(s):,} chars) ... s[-30:]"
+    return f"{s[0:MAX_DEBUG_PRINT -30]} ... ({len(s):,} chars) ... {s[-30:]}"
 
 
 def get_bucket_key(loc):
@@ -48,7 +48,7 @@ def get_s3path_etag(s3path):
     (bucket,key) = get_bucket_key(s3path)
     s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
     try:
-        etag      = s3obj.e_tag
+        etag     = s3obj.e_tag
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code']=='404':
             raise FileNotFoundError(s3path)
@@ -62,19 +62,27 @@ def get_s3path_etag(s3path):
 
 def server_search_post(*, search_endpoint, search_dicts, verify=DEFAULT_VERIFY):
     """Actually performs the server search. Handles search_dicts>server.MAX_SEARCH_OBJECTS"""
-    assert len(search_dicts) < MAX_SEARCH_OBJECTS
-    logging.debug("Search send: %s",debug_str(search_dicts))
-    r = requests.post(search_endpoint,
-                      data = {'searches':json.dumps(list(search_dicts.values()), default=str)},
-                      verify = verify)
-    if r.status_code!=HTTP_OK:
-        raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
-    try:
-        return r.json()
-    except json.decoder.JSONDecodeError as e:
-        print("Invalid response from server for search request: ",r,file=sys.stderr)
-        raise DVSServerError()
-
+    # For testing, use a stride of 5
+    MAX_SEARCH_OBJECTS=5
+    return_list = []
+    search_dict_values = list(search_dicts.values())
+    for stride in range(0, len(search_dict_values), MAX_SEARCH_OBJECTS):
+        stride_dicts = search_dict_values[stride:stride+MAX_SEARCH_OBJECTS]
+        logging.debug("Search send: %d/%d%s", stride, len(search_dict_values), debug_str(stride_dicts))
+        print(json.dumps(stride_dicts))
+        r = requests.post(search_endpoint,
+                          data = {'searches':json.dumps(stride_dicts, default=str)},
+                          verify = verify)
+        logging.debug(f"Return. r.status_code={r.status_code} len(r.text)={len(r.text)}")
+        if r.status_code!=HTTP_OK:
+            raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+        try:
+            return_list.extend(r.json())
+        except json.decoder.JSONDecodeError as e:
+            print("Invalid response from server for search request: ",r,file=sys.stderr)
+            raise DVSServerError()
+    logging.debug("Returning %d objects",len(return_list))
+    return return_list
 
 def server_s3search(*, s3path, s3path_etag, search_endpoint, verify=DEFAULT_VERIFY ):
     (bucket,key) = get_bucket_key(s3path)

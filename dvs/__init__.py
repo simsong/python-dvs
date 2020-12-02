@@ -41,6 +41,10 @@ API_V1 = {SEARCH:"/v1/search",
           COMMIT:"/v1/commit",
           DUMP:"/v1/dump" }
 
+def dvs_debug_obj_str(obj):
+    """For debugging, return a subjset of the object"""
+    return f"{obj.get('dirname','')}/{obj.get('filename','')}  {obj.get('hashes',{}).get('sha1','')}"
+
 class DVS_Singleton:
     """The Python singleton pattern. There are many singleton objects,
     but they all reference the same embedded object,
@@ -95,7 +99,7 @@ class DVS():
 
     def add(self, which, *, obj):
         """Basic method for adding an object to one of the lists """
-        logging.debug('add(%s,%s)',which,obj)
+        logging.debug('add(%s,%s)',which,dvs_debug_obj_str(obj))
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         if which not in self.file_obj_dict:
             self.file_obj_dict[which] = list()
@@ -205,7 +209,7 @@ class DVS():
         ### IS THAT SUPPOSED TO BE ONLY FOR THE LAST file_obj in the previous loop? That's the only one defined a this point
         logging.debug("# of objects to upload: %d",len(file_objs))
         for ct, obj in enumerate(file_objs, 1):
-            logging.debug("object %d: %s",ct, obj)
+            logging.debug("object %d: %s",ct, dvs_debug_obj_str(obj))
         logging.debug("commit: %s",json.dumps(self.the_commit,default=str,indent=4))
         ### DEBUG CODE END
 
