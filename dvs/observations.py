@@ -18,6 +18,7 @@ from multiprocessing import Pool
 Routines for getting observations.
 """
 
+from . import dvs_debug_obj_str
 from .dvs_constants import *
 from .dvs_helpers  import *
 from .server import MAX_SEARCH_OBJECTS
@@ -268,6 +269,7 @@ def get_file_observations(paths:list, *, search_endpoint:str, verify=DEFAULT_VER
                     FILE_HASHES in objr):
                     logging.info("using hash from server for %s ",path)
                     obj = {**objr, **get_file_observation(path)}
+                logging.debug("does not match %s",dvs_debug_obj_str(objr))
         if obj is None:
             logging.debug("Could not find hash; hashing file")
             obj = get_file_observation_with_hash(path)
