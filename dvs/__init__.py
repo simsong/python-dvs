@@ -27,6 +27,7 @@ if >1000 objects are present in a before or after, a group commit needs to be cr
 from .dvs_constants import *
 from .dvs_helpers import objects_dict,canonical_json
 from .observations import get_s3file_observations, get_file_observations, get_bucket_key
+from .exceptions import *
 
 # This should be simplified to be a single API_ENDPOINT which handles v1/search v1/commit and v1/dump
 # And perhaps storage endpoint where files can just be dumped. The files are text files of JSON objects, one per line, in the format:
@@ -39,19 +40,6 @@ DEFAULT_TIMEOUT = 5.0
 API_V1 = {SEARCH:"/v1/search",
           COMMIT:"/v1/commit",
           DUMP:"/v1/dump" }
-
-class DVSException(Exception):
-    """Base class for DVS Exceptions"""
-    pass
-
-class DVSGitException(DVSException):
-    pass
-
-class DVSServerError(DVSException):
-    pass
-
-class DVSServerTimeout(DVSServerError):
-    pass
 
 class DVS_Singleton:
     """The Python singleton pattern. There are many singleton objects,
@@ -242,7 +230,6 @@ class DVS():
             else:
                 boto3.resource('s3').Object(p.netloc, p.path[1:]).put(Body=data_bytes)
             return data
-
 
         # Send the objects and the commit
         try:

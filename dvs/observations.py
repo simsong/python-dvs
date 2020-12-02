@@ -20,8 +20,19 @@ Routines for getting observations.
 
 from .dvs_constants import *
 from .dvs_helpers  import *
+from .server import MAX_SEARCH_OBJECTS
+from .exceptions import DVSServerError
 
 DEFAULT_THREADS=20
+MAX_DEBUG_PRINT=260
+
+def debug_str(s):
+    """Return s if smaller than MAX_DEBUG_PRINT , otherwise print something more understandable"""
+    s = str(s)
+    if len(s) < MAX_DEBUG_PRINT:
+        return s
+    return f"{s[0:MAX_DEBUG_PRINT -30]} ... ({len(s):,} chars) ... s[-30:]"
+
 
 def get_bucket_key(loc):
     """Given a location, return the (bucket,key)"""
@@ -48,7 +59,23 @@ def get_s3path_etag(s3path):
         etag = etag[1:-1]
     return (s3path, etag)
 
-def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=DEFAULT_VERIFY ):
+
+def server_search_post(*, search_endpoint, search_dicts, verify=DEFAULT_VERIFY):
+    """Actually performs the server search. Handles search_dicts>server.MAX_SEARCH_OBJECTS"""
+    assert len(search_dicts) < MAX_SEARCH_OBJECTS
+    r = requests.post(search_endpoint,
+                      data = {'searches':json.dumps(list(search_dicts.values()), default=str)},
+                      verify = verify)
+    if r.status_code!=HTTP_OK:
+        raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+    try:
+        return r.json()
+    except json.decoder.JSONDecodeError as e:
+        print("Invalid response from server for search request: ",r,file=sys.stderr)
+        raise DVSServerError()
+
+
+def server_s3search(*, s3path, s3path_etag, search_endpoint, verify=DEFAULT_VERIFY ):
     (bucket,key) = get_bucket_key(s3path)
     s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
     search_dicts = {1 :
@@ -62,18 +89,12 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=DEFAULT_VERIF
                   }}
 
     # Now we want to send all of the objects to the server as a list
-    logging.debug("Search send: %s",str(search_dicts))
-    r = requests.post(search_endpoint,
-                      data={'searches':json.dumps(list(search_dicts.values()), default=str)},
-                      verify=verify)
-    if r.status_code!=HTTP_OK:
-        raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
+    logging.debug("Search send: %s",debug_str(search_dicts))
+    rjson = server_search_post(search_endopint = search_endpoint,
+                               search_dicts = search_dicts,
+                               verify = verify)
 
-    try:
-        results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in r.json()}
-    except json.decoder.JSONDecodeError as e:
-        print("Invalid response from server for search request: ",r,file=sys.stderr)
-        raise RuntimeError
+    results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in rjson}
 
 
     # Now we get the back and hash all of the objects for which the server has no knowledge, or for which the mtime does not agree
@@ -104,7 +125,7 @@ def server_s3search(*, s3path, s3path_etag,search_endpoint, verify=DEFAULT_VERIF
                 # Take the old values, because it hasn't changed
                 return objr
             else:
-                logging.debug("Not in %s",result)
+                logging.debug("Not in %s",debug_str(result))
     return None
 
 
@@ -216,7 +237,7 @@ def get_file_observations(paths:list, *, search_endpoint:str, verify=DEFAULT_VER
         results_by_searchid = {}
 
         # Now we want to send all of the objects to the server as a list
-        logging.debug("Search send: %s",str(search_dicts))
+        logging.debug("Search send: %s",debug_str(search_dicts))
         r = requests.post(search_endpoint,
                           data={'searches':json.dumps(list(search_dicts.values()), default=str)},
                           verify=verify)
