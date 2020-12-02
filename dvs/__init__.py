@@ -6,6 +6,23 @@ import requests
 import subprocess
 import os
 
+r"""
+The DVS class supports the following operations:
+dc = DVS() - make an object
+dc.set_message() - sets the COMMIT_MESSAGE
+dc.set_author()  - sets the COMMIT_AUTHOR
+dc.set_dataset() - sets the COMMIT_DATASET
+dc.add(which, obj=obj) - adds an object to COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER
+dc.add_git_commit(which, url=, commit=, src=) - adds a git commit to the commit
+dc.add_s3_paths(which, s3paths=) - adds s3 paths
+dc.add_s3_paths_or_prefixes(which, s3paths=) - adds s3 paths or prefixes
+dc.add_local_paths(which, paths=) - adds local paths (filenames)
+dc.commit() - writes the transaction to the local store or the remote server
+
+if >1000 objects are present in a before or after, a group commit needs to be created.
+
+
+"""
 
 from .dvs_constants import *
 from .dvs_helpers import objects_dict,canonical_json
@@ -131,7 +148,7 @@ class DVS():
             raise ValueError(f"which is {which} and not COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER")
 
 
-    def add_s3_paths(self, which, s3paths, *, threads=1, extra=None):
+    def add_s3_paths(self, which, s3paths, *, threads=DEFAULT_THREADS, extra=None):
         """Add a set of s3 objects, possibly caching.
         :param which: should we COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
         :param s3paths: paths to add.
@@ -176,17 +193,6 @@ class DVS():
                 obj = {**obj, **extra}
             self.add( which, obj=obj)
 
-
-    def add_before(self, *, obj):
-        return self.add(COMMIT_BEFORE, obj=obj)
-
-
-    def add_method(self, *args, obj, **kwargs):
-        return self.add(COMMIT_METHOD, obj=obj)
-
-
-    def add_after(self, *args, obj, **kwargs):
-        return self.add(COMMIT_AFTER, obj=obj)
 
     def commit(self, *args, **kwargs):
         """Continue to build the commit.
