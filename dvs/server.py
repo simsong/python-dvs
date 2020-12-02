@@ -34,6 +34,7 @@ from .dvs_helpers import is_hexadecimal,canonical_json,hexhash_string,comma_args
 
 MAX_DUMP_OBJECTS   = 1000
 MAX_SEARCH_OBJECTS = 1000
+MAX_SEARCH_RESULTS = 100
 
 def do_v2search(auth, *, search, debug=False):
     """Implements the low-level v2 search. This will change when we move to GraphQL.
@@ -42,9 +43,6 @@ def do_v2search(auth, *, search, debug=False):
     Right now there is no indexing on the objects. We may wish to create an index for the properties that we care about.
     Perhaps we should have used MongoDB?
     """
-    cmd = """SELECT objectid,created,hexhash,object,url from dvs_objects where """
-    wheres = []
-    vals   = []
     search_any = search.get(SEARCH_ANY,None)
     search_hashes = []
     if is_hexadecimal(search_any):
@@ -70,34 +68,56 @@ def do_v2search(auth, *, search, debug=False):
     if HOSTNAME in search:
         search_hostnames.append(search.get(HOSTNAME))
 
+    # Now construct the search string
+    cmd = """SELECT objectid,created,hexhash,object,url from dvs_objects where """
+    where_ors = []
+    vals   = []
+
+    # For these strings, allow them anywhere
     if search_hashes:
-        wheres.extend([" (hexhash LIKE %s) "] * len(search_hashes))
+        where_ors.extend([" (hexhash LIKE %s) "] * len(search_hashes))
         vals.extend(search_hashes)
-        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.md5')) LIKE %s) "] * len(search_hashes))
+        where_ors.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.md5')) LIKE %s) "] * len(search_hashes))
         vals.extend(search_hashes)
-        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha1')) LIKE %s) "] * len(search_hashes))
+        where_ors.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha1')) LIKE %s) "] * len(search_hashes))
         vals.extend(search_hashes)
-        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha256')) LIKE %s) "] * len(search_hashes))
+        where_ors.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha256')) LIKE %s) "] * len(search_hashes))
         vals.extend(search_hashes)
-        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha512')) LIKE %s) "] * len(search_hashes))
+        where_ors.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hashes.sha512')) LIKE %s) "] * len(search_hashes))
         vals.extend(search_hashes)
 
     if search_filenames:
-        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.filename')) LIKE %s) "] * len(search_filenames))
+        where_ors.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.filename')) LIKE %s) "] * len(search_filenames))
         vals.extend(search_filenames)
 
     if search_dirnames:
-        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.dirname')) LIKE %s) "] * len(search_dirnames))
+        where_ors.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.dirname')) LIKE %s) "] * len(search_dirnames))
         vals.extend(search_dirnames)
 
     if search_hostnames:
-        wheres.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hostname')) LIKE %s) "] * len(search_dirnames))
+        where_ors.extend([" (JSON_UNQUOTE(JSON_EXTRACT(object,'$.hostname')) LIKE %s) "] * len(search_dirnames))
         vals.extend(search_dirnames)
+
+    if where_ors:
+        cmd += "(" + " OR ".join(where_ors)  + ")"
+
+    # If we have a size, make it an exact match
+
+    where_ands = []
+    if (FILE_METADATA in search) and (ST_SIZE in search[FILE_METADATA]):
+        if where_ors:
+            cmd += " AND "
+        cmd += " (JSON_UNQUOTE(JSON_EXTRACT(object,'$.metadata.st_size')) = %s) "
+        vals.append(search[FILE_METADATA][ST_SIZE])
+
 
     if len(vals)==0:
         return []
 
-    rows = dbfile.DBMySQL.csfr(auth, cmd + " OR ".join(wheres), vals, asDicts=True, debug=debug)
+    cmd += " LIMIT %s"
+    vals.append(MAX_SEARCH_RESULTS)
+    
+    rows = dbfile.DBMySQL.csfr(auth, cmd, vals, asDicts=True, debug=debug)
     # load the JSON...
     return [{**row, **{OBJECT:json.loads(row[OBJECT])}} for row in rows]
 
@@ -108,6 +128,7 @@ def search_api(auth):
     The response is a list of dicts. Each dict contains the search array and a list of the search responses.
     """
     import bottle
+    #print(dict(bottle.request.params),file=sys.stderr)
     try:
         searches = json.loads(bottle.request.params.searches)
     except json.decoder.JSONDecodeError:
