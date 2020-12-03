@@ -29,10 +29,10 @@ print(DVS_DEMO_PATH)
 import tempfile
 
 INFILES = 3
-FILENAME_TEMPLATE = "{name}_file_{num}"
+FILENAME_TEMPLATE = "{name}_file_{num}.txt"
 
 def make_tempfile(d,name,num):
-    with open(os.path.join(d,FILENAME_TEMPLATE.format(name=name,num=num))) as f:
+    with open(os.path.join(d,FILENAME_TEMPLATE.format(name=name,num=num)),"w") as f:
         print(f"Temporary file created at {time.localtime()}",file=f)
         return f.name
 
@@ -48,14 +48,16 @@ def test_dvs_fileset():
         d2 = dvs.DVS()
 
         for num in range(1,4):
-            d2.add_local_paths(dc.COMMIT_BEFORE, make_tempfile(d, "infile", num))
+            d2.add_local_paths(dc.COMMIT_BEFORE,[ make_tempfile(d, "infile", num)])
         dc.add_child(dc.COMMIT_BEFORE, d2)
 
         d3 = dvs.DVS()
         for num in range(1,4):
-            d2.add_local_paths(dc.COMMIT_AFTER, make_tempfile(d, "outfile", num))
+            d2.add_local_paths(dc.COMMIT_AFTER, [make_tempfile(d, "outfile", num)])
         dc.add_child(dc.COMMIT_AFTER, d3)
 
+        dc.dump()
+        print("===================== parent commit =================================",file=sys.stderr)
         dc.commit()
 
 

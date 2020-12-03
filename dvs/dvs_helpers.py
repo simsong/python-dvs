@@ -174,4 +174,6 @@ def length_of_unique_prefix(hexhashes) -> int:
 
 def dvs_debug_obj_str(obj):
     """For debugging, return a subjset of the object"""
-    return f"{obj.get('dirname','')}/{obj.get('filename','')}  {obj.get('hashes',{}).get('sha1','')}"
+    if isinstance(obj,dict):
+        return f"{obj.get('dirname','')}/{obj.get('filename','')}  {obj.get('hashes',{}).get('sha1','')}"
+    return str(obj)
