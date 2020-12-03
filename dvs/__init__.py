@@ -5,11 +5,34 @@ import json
 import requests
 import subprocess
 import os
+import inspect
+import sys
 
+r"""
+The DVS class supports the following operations:
+dc = DVS() - make an object
+dc.set_message() - sets the COMMIT_MESSAGE
+dc.set_author()  - sets the COMMIT_AUTHOR
+dc.set_dataset() - sets the COMMIT_DATASET
+dc.add(which, obj=obj) - adds an object to COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER
+dc.add_git_commit(which, url=, commit=, src=) - adds a git commit to the commit
+dc.add_s3_paths(which, s3paths=) - adds s3 paths
+dc.add_s3_paths_or_prefixes(which, s3paths=) - adds s3 paths or prefixes
+dc.add_local_paths(which, paths=) - adds local paths (filenames)
+dc.commit() - writes the transaction to the local store or the remote server
+dc.add_child()   - Adds a child DVS commit as a child DVS commit.
+                 This allows files to be grouped together to prevent single commits with a million files.
+                 Instead, you have 1000 sub-commits with 1000 files each, and then 1 commit with 1000 sub commits.
+
+if >1000 objects are present in a before or after, a group commit needs to be created.
+
+
+"""
 
 from .dvs_constants import *
-from .dvs_helpers import objects_dict,canonical_json
-from .observations import get_s3file_observations, get_file_observations, get_bucket_key
+from .dvs_helpers   import objects_dict,canonical_json,dvs_debug_obj_str
+from .observations  import get_s3file_observations, get_file_observations, get_bucket_key
+from .exceptions    import *
 
 # This should be simplified to be a single API_ENDPOINT which handles v1/search v1/commit and v1/dump
 # And perhaps storage endpoint where files can just be dumped. The files are text files of JSON objects, one per line, in the format:
@@ -22,19 +45,6 @@ DEFAULT_TIMEOUT = 5.0
 API_V1 = {SEARCH:"/v1/search",
           COMMIT:"/v1/commit",
           DUMP:"/v1/dump" }
-
-class DVSException(Exception):
-    """Base class for DVS Exceptions"""
-    pass
-
-class DVSGitException(DVSException):
-    pass
-
-class DVSServerError(DVSException):
-    pass
-
-class DVSServerTimeout(DVSServerError):
-    pass
 
 class DVS_Singleton:
     """The Python singleton pattern. There are many singleton objects,
@@ -63,10 +73,17 @@ class DVS():
         self.COMMIT_METHOD = COMMIT_METHOD
         self.COMMIT_AUTHOR = COMMIT_AUTHOR
         self.COMMIT_DATASET= COMMIT_DATASET
-        self.ACL           = ACL
+        self.ACL           = ACL # S3 ACL
         if ACL is None and DVS_AWS_S3_ACL_ENV in os.environ:
             self.ACL = os.environ[DVS_AWS_S3_ACL_ENV]
+        self.children      = [] # stores tuples of (which, DVS) objects.
 
+
+    def dump(self,file=sys.stderr):
+        print("DVS object ",id(self),file=file)
+        for k in dir(self):
+            if not k.startswith("__"):
+                print(f"   {k} = {getattr(self,k)}",file=file)
 
     def add_kv(self, *, key, value, overwrite=False):
         """Adds an arbitrary key/value to the commit"""
@@ -74,8 +91,9 @@ class DVS():
             if self.the_commit[key]==value:
                 return
             raise KeyError(f"{key} already in the_commit")
-        if not key.startswith("x-"):
-            raise ValueError(f"{key} must start with 'x-'")
+        # Make sure it is one of our allowed
+        if key not in [COMMIT_AUTHOR, COMMIT_DATASET, COMMIT_MESSAGE] and not key.startswith("x-"):
+            raise ValueError(f"{key} must be a pre-defined name or start with 'x-'")
         self.the_commit[key] = value
 
 
@@ -90,14 +108,25 @@ class DVS():
 
     def add(self, which, *, obj):
         """Basic method for adding an object to one of the lists """
-        logging.debug('add(%s,%s)',which,obj)
+        logging.debug('add(%s,%s)',which,dvs_debug_obj_str(obj))
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
         if which not in self.file_obj_dict:
             self.file_obj_dict[which] = list()
         self.file_obj_dict[which].append(obj)
 
-    def add_git_commit(self, *, which=COMMIT_METHOD, url=None, commit=None, src=None):
+    def add_git_commit(self, which=COMMIT_METHOD, *, url=None, commit=None, src=None, auto=False):
+        """Add a pointer to a remote URL (typically a git commit)
+        :param which: which commit part this is. Either COMMIT_BEFORE, COMMIT_METHOD, or COMMIT_AFTER.
+        :param url: remote URL.
+        :param commit: a git SHA-1. If provided, src may not be provided.
+        :param src: A file to examine to determine its git commit. If provided, commit may not be provied.
+        :param auto: automatically infer src= from the caller. If provided, src= is set.
+        """
+
         logging.debug('=== add_git_commit')
+        if auto:
+            src = inspect.stack()[1].filename
+
         if commit is None and src is None:
             raise RuntimeError("either commit or src must be provided")
         if commit is not None and src is not None:
@@ -131,7 +160,7 @@ class DVS():
             raise ValueError(f"which is {which} and not COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER")
 
 
-    def add_s3_paths(self, which, s3paths, *, threads=1, extra=None):
+    def add_s3_paths(self, which, s3paths, *, threads=DEFAULT_THREADS, extra=None):
         """Add a set of s3 objects, possibly caching.
         :param which: should we COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
         :param s3paths: paths to add.
@@ -167,6 +196,11 @@ class DVS():
     def add_local_paths(self, which, paths, extra=None):
         """Add multiple paths using remote cache"""
 
+        if isinstance(paths,str):
+            raise ValueError("add_local_paths takes a list of string-like objects, not a string-like object")
+
+        # Get full path name for every file
+        paths = [os.path.abspath(p) for p in paths]
         file_objs = get_file_observations(paths,
                                           search_endpoint =self.get_search_endpoint(which),
                                           verify=self.verify)
@@ -177,16 +211,10 @@ class DVS():
             self.add( which, obj=obj)
 
 
-    def add_before(self, *, obj):
-        return self.add(COMMIT_BEFORE, obj=obj)
-
-
-    def add_method(self, *args, obj, **kwargs):
-        return self.add(COMMIT_METHOD, obj=obj)
-
-
-    def add_after(self, *args, obj, **kwargs):
-        return self.add(COMMIT_AFTER, obj=obj)
+    def add_child(self, which, obj):
+        logging.debug('add(%s,%s)', which, obj)
+        assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
+        self.children.append( (which, obj) )
 
     def commit(self, *args, **kwargs):
         """Continue to build the commit.
@@ -194,11 +222,12 @@ class DVS():
         self.the_commit - a dictionary with the base fields.
         self.file_objec_dict - A dictionary with optional COMMIT_BEFORE, COMMIT_METHOD, and COMMIT_AFTER objects,
                      which will be seralized and stored as part of the transaction.
-        returns the object for the commit.
+        :returns : a dictionary of {hexhash:commit_dict}, either generated by the server or as stored in S3.
         """
 
         # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON
         all_objects = {}
+
         # grab the COMMIT_BEFORE, COMMIT_METHOD, and COMMIT_AFTER object lists.
         for which, file_objs in self.file_obj_dict.items():
             assert isinstance(file_objs,list)
@@ -207,20 +236,33 @@ class DVS():
             self.the_commit[which] = list(objects.keys())
             all_objects   = {**all_objects, **objects}
 
+        if len(all_objects)==0:
+            raise DVSCommitError("Will not commit with no BEFORE, METHOD, or AFTER objects")
+
         ### DEBUG CODE START
         ### IS THAT SUPPOSED TO BE ONLY FOR THE LAST file_obj in the previous loop? That's the only one defined a this point
-        logging.debug("# of objects to upload: %d",len(file_objs))
-        for ct, obj in enumerate(file_objs, 1):
-            logging.debug("object %d: %s",ct, obj)
+        logging.debug("# of objects to upload: %d",len(all_objects))
+        for ct, obj in enumerate(all_objects, 1):
+            logging.debug("object %d: %s",ct, dvs_debug_obj_str(obj))
         logging.debug("commit: %s",json.dumps(self.the_commit,default=str,indent=4))
         ### DEBUG CODE END
+
+        # For each of the child commits, commit the child and add its hexhash directly
+        # to the current commit
+        for (which, dc) in self.children:
+            child_commit = dc.commit()
+            if which not in self.the_commit:
+                self.the_commit[which] = []
+            assert len(list(child_commit))==1
+            self.the_commit[which].append(list(child_commit.keys())[0])
 
         data = {API_OBJECTS:canonical_json(all_objects),
                 API_COMMIT:canonical_json(self.the_commit)}
 
+        # If we are using the S3 object cache, then upload the object to S3 and return the object.
         if DVS_OBJECT_CACHE_ENV in os.environ:
-            import boto3
             # https://github.com/boto/boto3/issues/894
+            import boto3
             boto3.set_stream_logger('boto3.resources', logging.INFO, format_string='%(message).1600s')
             from urllib.parse import urlparse
             from hashlib import sha1
@@ -235,10 +277,10 @@ class DVS():
                 boto3.resource('s3').Object(p.netloc, p.path[1:]).put(Body=data_bytes, ACL=self.ACL)
             else:
                 boto3.resource('s3').Object(p.netloc, p.path[1:]).put(Body=data_bytes)
-            return data
+            return {hexhash:data}
 
 
-        # Send the objects and the commit
+        # Send the objects to the server and return the commit
         try:
             commit_url = self.api_endpoint + API_V1[COMMIT]
             r = requests.post(commit_url,
