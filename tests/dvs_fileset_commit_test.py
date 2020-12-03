@@ -53,7 +53,7 @@ def test_dvs_fileset():
 
         d3 = dvs.DVS()
         for num in range(1,4):
-            d2.add_local_paths(dc.COMMIT_AFTER, [make_tempfile(d, "outfile", num)])
+            d3.add_local_paths(dc.COMMIT_AFTER, [make_tempfile(d, "outfile", num)])
         dc.add_child(dc.COMMIT_AFTER, d3)
 
         dc.dump()

@@ -236,6 +236,9 @@ class DVS():
             self.the_commit[which] = list(objects.keys())
             all_objects   = {**all_objects, **objects}
 
+        if len(all_objects)==0:
+            raise DVSCommitError("Will not commit with no BEFORE, METHOD, or AFTER objects")
+
         ### DEBUG CODE START
         ### IS THAT SUPPOSED TO BE ONLY FOR THE LAST file_obj in the previous loop? That's the only one defined a this point
         logging.debug("# of objects to upload: %d",len(all_objects))
@@ -246,18 +249,12 @@ class DVS():
 
         # For each of the child commits, commit the child and add its hexhash directly
         # to the current commit
-        print("%%% children:",self.children,file=sys.stderr)
         for (which, dc) in self.children:
-            print(">> starting child commit")
             child_commit = dc.commit()
-            print(">> ending child commit")
             if which not in self.the_commit:
                 self.the_commit[which] = []
-            print(">>>> child_commit:",child_commit,file=sys.stderr)
             assert len(list(child_commit))==1
             self.the_commit[which].append(list(child_commit.keys())[0])
-
-        print(">>>> the_commit after additions: ",json.dumps(self.the_commit,indent=4),file=sys.stderr)
 
         data = {API_OBJECTS:canonical_json(all_objects),
                 API_COMMIT:canonical_json(self.the_commit)}
@@ -286,7 +283,6 @@ class DVS():
         # Send the objects to the server and return the commit
         try:
             commit_url = self.api_endpoint + API_V1[COMMIT]
-            print("****** data=",json.dumps(data,indent=4),file=sys.stderr)
             r = requests.post(commit_url,
                               data=data,
                               verify=self.verify,
