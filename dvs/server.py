@@ -326,7 +326,11 @@ def commit_api(auth):
     commit[REMOTE_FQDN] = socket.getfqdn(bottle.request.remote_addr)
 
     # Now store the commit as another object
-    commit_obj = store_commit(auth, commit)
+    try:
+        commit_obj = store_commit(auth, commit)
+    except ValueError as e:
+        bottle.response.status = 400
+        return str(e)
     return json.dumps( commit_obj,default=str)
 
 
