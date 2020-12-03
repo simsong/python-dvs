@@ -5,6 +5,7 @@ import json
 import requests
 import subprocess
 import os
+import inspect
 
 r"""
 The DVS class supports the following operations:
@@ -79,8 +80,9 @@ class DVS():
             if self.the_commit[key]==value:
                 return
             raise KeyError(f"{key} already in the_commit")
-        if not key.startswith("x-"):
-            raise ValueError(f"{key} must start with 'x-'")
+        # Make sure it is one of our allowed
+        if key not in [COMMIT_AUTHOR, COMMIT_DATASET, COMMIT_MESSAGE] and not key.startswith("x-"):
+            raise ValueError(f"{key} must be a pre-defined name or start with 'x-'")
         self.the_commit[key] = value
 
 
@@ -101,8 +103,19 @@ class DVS():
             self.file_obj_dict[which] = list()
         self.file_obj_dict[which].append(obj)
 
-    def add_git_commit(self, *, which=COMMIT_METHOD, url=None, commit=None, src=None):
+    def add_git_commit(self, which=COMMIT_METHOD, *, url=None, commit=None, src=None, auto=False):
+        """Add a pointer to a remote URL (typically a git commit)
+        :param which: which commit part this is. Either COMMIT_BEFORE, COMMIT_METHOD, or COMMIT_AFTER.
+        :param url: remote URL.
+        :param commit: a git SHA-1. If provided, src may not be provided.
+        :param src: A file to examine to determine its git commit. If provided, commit may not be provied.
+        :param auto: automatically infer src= from the caller. If provided, src= is set.
+        """
+
         logging.debug('=== add_git_commit')
+        if auto:
+            src = inspect.stack()[1].filename
+
         if commit is None and src is None:
             raise RuntimeError("either commit or src must be provided")
         if commit is not None and src is not None:
