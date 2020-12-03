@@ -106,7 +106,7 @@ def server_s3search(*, s3path, s3path_etag, search_endpoint, verify=DEFAULT_VERI
 
     # Now we want to send all of the objects to the server as a list
     logging.debug("Search send: %s",debug_str(search_dicts))
-    rjson = server_search_post(search_endopint = search_endpoint,
+    rjson = server_search_post(search_endpoint = search_endpoint,
                                search_dicts = search_dicts,
                                verify = verify)
 
