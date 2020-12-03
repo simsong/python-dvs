@@ -21,10 +21,9 @@ AWS_HEADER_ETAG="Etag"
 AWS_HEADER_SERVER="Server"
 
 # Environment variables
-
-# If this variable is defined, just put the objects there, and do not talk to the serve
-DVS_OBJECT_CACHE_ENV='DVS_OBJECT_CACHE'
-DVS_AWS_S3_ACL_ENV='DVS_AWS_S3_ACL'
+# Object cache: If this variable is defined, just put the objects there, and do not talk to the server
+DVS_OBJECT_CACHE_ENV='DVS_OBJECT_CACHE' # S3 location object cache
+DVS_AWS_S3_ACL_ENV='DVS_AWS_S3_ACL'     # ACL to specify when writing to object cache
 
 
 

@@ -63,7 +63,7 @@ class DVS():
         self.COMMIT_METHOD = COMMIT_METHOD
         self.COMMIT_AUTHOR = COMMIT_AUTHOR
         self.COMMIT_DATASET= COMMIT_DATASET
-        self.ACL           = ACL
+        self.ACL           = ACL # S3 ACL
         if ACL is None and DVS_AWS_S3_ACL_ENV in os.environ:
             self.ACL = os.environ[DVS_AWS_S3_ACL_ENV]
 
