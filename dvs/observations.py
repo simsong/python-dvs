@@ -193,7 +193,7 @@ def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=DEFAULT
     else:
         logging.info("Checking server for %s paths",len(s3paths))
         for s3path in s3paths:
-            if s3path[s3path_content_lengths] > CACHE_CHECK_S3_MIN_FILE_SIZE:
+            if s3path_content_lengths[s3path_content_lengths] > CACHE_CHECK_S3_MIN_FILE_SIZE:
                 objr =  server_s3search(s3path=s3path, s3path_etag=s3path_etags[s3path],
                                         search_endpoint=search_endpoint, verify=DEFAULT_VERIFY)
                 if objr:
