@@ -71,6 +71,10 @@ HEXHASH='hexhash'
 HEXHASH_ALG='sha1'              # which algorithm we are using
 SEARCH_ANY='*'
 
+# Attributes
+ATTRIBUTE_EPHEMERAL="ephemeral"
+ATTRIBUTES=[ATTRIBUTE_EPHEMERAL]
+
 # This is a duplicate SEARCH='search'                 # takes a single dict
 REMOTE_FQDN='remote_fqdn'       # fqdn observed of remote ip address
 REMOTE_ADDR='remote_addr'       # remote address for a commit

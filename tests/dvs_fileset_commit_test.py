@@ -31,34 +31,52 @@ import tempfile
 INFILES = 3
 FILENAME_TEMPLATE = "{name}_file_{num}.txt"
 
-def make_tempfile(d,name,num):
+def make_local_tempfile(d, name, num, extra):
     with open(os.path.join(d,FILENAME_TEMPLATE.format(name=name,num=num)),"w") as f:
         print(f"Temporary file created at {time.localtime()}",file=f)
+        if extra:
+            BUF="X"*(1024*1024)
+            while extra>0:
+                extra -= f.write(BUF[0:extra])
         return f.name
 
-def test_dvs_fileset():
+def do_dvs_fileset(infile_count, sub_infile_count, sub_outfile_count, extra, check_server):
     with tempfile.TemporaryDirectory() as d:
-
         # Make a few input files, create a fileset, make a few more files, make a file set, and cat them all to the output
         dc = dvs.DVS()
         dc.set_message("test_dvs_fileset in py.test")
         dc.set_author(os.getenv("USER"))
         dc.add_git_commit(dc.COMMIT_METHOD, auto=True)
+        dc.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
 
-        d2 = dvs.DVS()
+        # Test add_local_path with multiple objects
+        if infile_count:
+            dc.add_local_paths(dc.COMMIT_BEFORE, [make_local_tempfile(d, "infile", num, extra) for num in range(1, infile_count) ] )
 
-        for num in range(1,4):
-            d2.add_local_paths(dc.COMMIT_BEFORE,[ make_tempfile(d, "infile", num)])
-        dc.add_child(dc.COMMIT_BEFORE, d2)
+        # Test lots of individual adds, each with an object
+        if sub_infile_count:
+            d2 = dvs.DVS()
+            for num in range(1, sub_infile_count+1):
+                d2.add_local_paths(dc.COMMIT_BEFORE,[ make_local_tempfile(d, "sub-infile", num, extra)])
+            dc.add_child(dc.COMMIT_BEFORE, d2)
 
-        d3 = dvs.DVS()
-        for num in range(1,4):
-            d3.add_local_paths(dc.COMMIT_AFTER, [make_tempfile(d, "outfile", num)])
-        dc.add_child(dc.COMMIT_AFTER, d3)
+        if sub_outfile_count:
+            d3 = dvs.DVS()
+            for num in range(1, sub_outfile_count+1):
+                d3.add_local_paths(dc.COMMIT_AFTER, [ make_local_tempfile(d, "sub-outfile", num, extra)])
+            dc.add_child(dc.COMMIT_AFTER, d3)
 
-        dc.dump()
-        print("===================== parent commit =================================",file=sys.stderr)
         dc.commit()
 
+def test_dvs_fileset():
+    # Simple tranaction with 4 inputs and 4 outputs and sub-commits
+    do_dvs_fileset(4, 4, 0, True, False)
+    # Transaction with 1000 inputs and 1 output
 
-    pass
+
+if __name__=="__main__":
+    # Run with requests logging
+    import requests
+    import logging
+    logging.basicCOnfig(level=logging.DEBUG)
+    test_dvs_fileset()

@@ -24,6 +24,8 @@ dc.add_child()   - Adds a child DVS commit as a child DVS commit.
                  This allows files to be grouped together to prevent single commits with a million files.
                  Instead, you have 1000 sub-commits with 1000 files each, and then 1 commit with 1000 sub commits.
 
+dc.set_attribute(attrib) - sets ATTRIBUTE_EPHEMERAL for the transaction and its children (allows GC according to policy)
+
 if >1000 objects are present in a before or after, a group commit needs to be created.
 
 
@@ -68,16 +70,21 @@ class DVS():
         self.verify        = verify
         self.debug         = debug
         self.timeout       = timeout
-        self.COMMIT_BEFORE = COMMIT_BEFORE
-        self.COMMIT_AFTER  = COMMIT_AFTER
-        self.COMMIT_METHOD = COMMIT_METHOD
-        self.COMMIT_AUTHOR = COMMIT_AUTHOR
-        self.COMMIT_DATASET= COMMIT_DATASET
+        # Copy over select constants
+        for attrib in dir(dvs_constants):
+            if attrib.startswith("COMMIT") or attrib.startswith("ATTRIBUTE"):
+                setattr(self,attrib,getattr(dvs_constants,attrib))
         self.ACL           = ACL # S3 ACL
         if ACL is None and DVS_AWS_S3_ACL_ENV in os.environ:
             self.ACL = os.environ[DVS_AWS_S3_ACL_ENV]
         self.children      = [] # stores tuples of (which, DVS) objects.
 
+
+    def set_attribute(self, attrib, value='true'):
+        """Set the attribute in the current commit. The attribute will be set in children on commis."""
+        if attrib not in ATTRIBUTES:
+            raise ValueError(f"{attrib} is not a valid DVS attribute")
+        self.the_commit[attrib] = value
 
     def dump(self,file=sys.stderr):
         print("DVS object ",id(self),file=file)
@@ -167,7 +174,7 @@ class DVS():
         :param threads: how many threads to use. Currently ignored.
 
         """
-        s3objs = get_s3file_observations( s3paths, search_endpoint = self.get_search_endpoint(which))
+        s3objs = get_s3file_observations( s3paths, search_endpoint = self.get_search_endpoint(which), threads=threads)
         if extra is not None:
             for s3obj in s3objs:
                 assert set.intersection(set(s3obj.keys()), set(extra.keys())) == set()
@@ -247,10 +254,17 @@ class DVS():
         logging.debug("commit: %s",json.dumps(self.the_commit,default=str,indent=4))
         ### DEBUG CODE END
 
-        # For each of the child commits, commit the child and add its hexhash directly
-        # to the current commit
-        for (which, dc) in self.children:
-            child_commit = dc.commit()
+        # For each of the child commits:
+        # 1 - make sure all of the children have the attributes of the parent.
+        # 2 - commit the child and add its hexhash directly to the current commit
+        for (which, child) in self.children:
+
+            for attrib in ATTRIBUTES:
+                if attrib in self.the_commit:
+                    child.set_attribute( attrib, self.the_commit[attrib] )
+
+
+            child_commit = child.commit()
             if which not in self.the_commit:
                 self.the_commit[which] = []
             assert len(list(child_commit))==1
