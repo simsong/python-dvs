@@ -88,7 +88,7 @@ DURATION='duration'             # commit - how long the commit took (so we don't
 # Commit API
 API_OBJECTS='objects'
 API_COMMIT='commit'
-
+API_SEARCH_LIMIT=100            # don't return more than 100 objects
 
 # Dump
 DUMP='dump'
