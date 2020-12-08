@@ -25,6 +25,7 @@ def test_simple_commit():
         tf.write(time.asctime()) # always different
         dc.add_local_paths( COMMIT_BEFORE, [tf.name] )
         dc.add_local_paths( COMMIT_METHOD, [__file__] )
+        dc.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
         dc.commit()
 
 

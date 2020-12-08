@@ -58,12 +58,14 @@ def do_dvs_fileset(infile_count, sub_infile_count, sub_outfile_count, extra, che
             d2 = dvs.DVS()
             for num in range(1, sub_infile_count+1):
                 d2.add_local_paths(dc.COMMIT_BEFORE,[ make_local_tempfile(d, "sub-infile", num, extra)])
+            d2.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
             dc.add_child(dc.COMMIT_BEFORE, d2)
 
         if sub_outfile_count:
             d3 = dvs.DVS()
             for num in range(1, sub_outfile_count+1):
                 d3.add_local_paths(dc.COMMIT_AFTER, [ make_local_tempfile(d, "sub-outfile", num, extra)])
+            d3.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
             dc.add_child(dc.COMMIT_AFTER, d3)
 
         dc.commit()
