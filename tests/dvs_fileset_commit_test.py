@@ -84,7 +84,11 @@ def test_dvs_commit_1000():
 
 def test_dvs_commit_1500():
     # Transaction with 1500 inputs. Should generate error
-    do_dvs_fileset(1500, 0, 0)
+    try:
+        do_dvs_fileset(1500, 0, 0)
+        raise RuntimeError("DVS commit with >1000 objects should fail")
+    except dvs.exceptions.DVSClientError as e:
+        return
 
 
 if __name__=="__main__":

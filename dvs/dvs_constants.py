@@ -25,6 +25,8 @@ AWS_HEADER_SERVER="Server"
 DVS_OBJECT_CACHE_ENV='DVS_OBJECT_CACHE' # S3 location object cache
 DVS_AWS_S3_ACL_ENV='DVS_AWS_S3_ACL'     # ACL to specify when writing to object cache
 
+# Limits
+MAX_OBJECTS_LIST = 1000         # throw an error if >1000 objects in BEFORE, METHOD, or AFTER
 
 
 ID='id'
