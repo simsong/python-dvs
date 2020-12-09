@@ -124,15 +124,9 @@ class DVS():
             self.file_obj_dict[which] = list()
         self.file_obj_dict[which].append(obj)
 
-        while len(self.file_obj_dict[which]) > MAX_OBJECTS_LIST:
+        if len(self.file_obj_dict[which]) > MAX_OBJECTS_LIST:
             if OPTION_NO_AUTO_SUB_COMMIT in self.options:
                 raise DVSTooManyObjects(f"len(file_obj_dict[{which}])={(len(self.file_obj_dict[which]))} and OPTION_NO_AUTO_SUB_COMMIT set")
-            # Create a child commit and move these objects into it
-            child = DVS()
-            self.add_child( which, child)
-            for i in range(MAX_OBJECTS_LIST):
-                child.add( which, obj=self.file_obj_dict[which].pop())
-
 
     def add_git_commit(self, which=COMMIT_METHOD, *, url=None, commit=None, src=None, auto=False):
         """Add a pointer to a remote URL (typically a git commit)
@@ -247,13 +241,31 @@ class DVS():
 
         # Scan the objects being commited
         for which in set([COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]).intersection(self.file_obj_dict.keys()):
-            # If we have too many objects, abort
-            if len(self.file_obj_dict[which]) > MAX_OBJECTS_LIST:
-                raise DVSCommitError("{} objects in {} > {}".format(len(self.file_obj_dict[which]), which, MAX_OBJECTS_LIST))
-            # Add attributes in commit to the objects
+
+            # Repeat while we have too many children
+            while len(self.file_obj_dict[which]) > MAX_OBJECTS_LIST:
+
+                # If we do not automatically make children, abort
+                if OPTION_NO_AUTO_SUB_COMMIT in self.options:
+                    raise DVSTooManyObjects(f"len(file_obj_dict[{which}])={(len(self.file_obj_dict[which]))} and OPTION_NO_AUTO_SUB_COMMIT set")
+
+                # Create a child commit and move these objects into it
+                children = []
+                while len(self.file_obj_dict[which]) > MAX_OBJECTS_LIST:
+                    child = DVS()
+                    for i in range(MAX_OBJECTS_LIST):
+                        child.add( which, obj=self.file_obj_dict[which].pop())
+                    children.append(child)
+                # Now add all of the children
+                for child in children:
+                    self.add_child( which, child)
+                # If we added more than 1000 children, we will loop and children a child of all the children
+
+            # Add attributes in commit to the BEFORE, METHOD and AFTER objects
             for attrib in set(ATTRIBUTES).intersection(self.the_commit.keys()):
                 for obj in self.file_obj_dict[which]:
                     obj[attrib] = self.the_commit[attrib]
+            # The attributes will be added to the children below
 
         # Construct the FILE_OBJ list, which is the hexhash of the canonical JSON of all the objects
         all_objects = {}
