@@ -47,8 +47,11 @@ def do_dvs_fileset(infile_count, sub_infile_count, sub_outfile_count, filesize =
         # Make a few input files, create a fileset, make a few more files, make a file set, and cat them all to the output
         logging.info("do_dvs_fileset. infile_count=%d subinfile=%d suboutfile=%d ", infile_count, sub_infile_count, sub_outfile_count)
         dc = dvs.DVS(options=options)
-        dc.set_message("test_dvs_fileset in py.test")
+        dc.set_message(f"test_dvs_fileset(infile_count={infile_count}, "
+                       f"sub_infile_count={sub_infile_count}, sub_outfile_count={sub_outfile_count}) in py.test")
         dc.set_author(os.getenv("USER"))
+        if "JBID" in os.environ:
+            dc.add_kv(key="x-jbid", value=os.getenv("JBID"))
         dc.add_git_commit(dc.COMMIT_METHOD, auto=True)
         dc.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
 

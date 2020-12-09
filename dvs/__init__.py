@@ -61,7 +61,8 @@ class DVS_Singleton:
         return getattr(DVS_Singleton.instance, name)
 
 class DVS():
-    def __init__(self, base=None, api_endpoint=None, verify=DEFAULT_VERIFY, debug=False, ACL=None, timeout=DEFAULT_TIMEOUT, options=dict()):
+    def __init__(self, base=None, api_endpoint=None, verify=DEFAULT_VERIFY,
+                 debug=False, ACL=None, timeout=DEFAULT_TIMEOUT, options=dict()):
         """Start a DVS transaction"""
         self.the_commit    = base if base is not None else {}
         self.file_obj_dict = {} # where the file objects will end up
