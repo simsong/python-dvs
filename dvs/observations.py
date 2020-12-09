@@ -46,22 +46,24 @@ def get_bucket_key(loc):
         return p.netloc, p.path[1:]
     assert ValueError("{} is not an s3 location".format(loc))
 
+def clean_etag(etag):
+    """Amazon's S3 protocol returns etags surrounded by quotes for an unknown reason"""
+    if etag[0] == '"':
+        return etag[1:-1]
+    return etag
+
 
 def get_s3path_etag_bytes(s3path):
     """Given an s3path, return a tuple of (s3path, ETag, bytes). Designed to be parallelized"""
     (bucket,key) = get_bucket_key(s3path)
     s3obj        = boto3.resource( AWS_S3 ).Object( bucket, key)
     try:
-        etag     = s3obj.e_tag
+        etag     = clean_etag(s3obj.e_tag)
         obytes   = s3obj.content_length
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code']=='404':
             raise FileNotFoundError(s3path)
         raise(e)
-    # Annoying, S3 ETags come with quotes, which we will now remove. But perhaps one day they won't,
-    # so check for the tag before removing it
-    if etag[0] == '"':
-        etag = etag[1:-1]
     return (s3path, etag, s3obj.content_length)
 
 
@@ -100,7 +102,7 @@ def server_s3search(*, s3path, s3path_etag, search_endpoint, verify=DEFAULT_VERI
                       FILENAME:  os.path.basename(key),
                       FILE_METADATA: {ST_SIZE  : s3obj.content_length,
                                       ST_MTIME : int(s3obj.last_modified.timestamp()),
-                                      ETAG     : s3obj.e_tag},
+                                      ETAG     : clean_etag(s3obj.e_tag)},
                       ID: 1
                   }}
 
@@ -157,7 +159,7 @@ def hash_s3path(s3path:str):
             FILENAME: os.path.basename(key),
             FILE_METADATA: {ST_SIZE  : s3obj.content_length,
                             ST_MTIME : int(s3obj.last_modified.timestamp()),
-                            ETAG     : s3obj.e_tag},
+                            ETAG     : clean_etag(s3obj.e_tag)},
             FILE_HASHES: hashes}
 
 
