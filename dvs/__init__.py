@@ -253,7 +253,7 @@ class DVS():
                 children = []
                 while len(self.file_obj_dict[which]) > 0:
                     child = DVS()
-                    for i in range( min(MAX_OBJECTS_LIST), len(self.file_obj_dict[which])):
+                    for i in range( min(MAX_OBJECTS_LIST, len(self.file_obj_dict[which]))):
                         child.add( which, obj=self.file_obj_dict[which].pop())
                     children.append(child)
                 # Now add all of the children
