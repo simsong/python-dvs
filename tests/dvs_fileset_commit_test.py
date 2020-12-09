@@ -42,11 +42,11 @@ def make_local_tempfile(prefix, name, num, filesize):
         return f.name
 
 
-def do_dvs_fileset(infile_count, sub_infile_count, sub_outfile_count, filesize = 4096, check_server=False):
+def do_dvs_fileset(infile_count, sub_infile_count, sub_outfile_count, filesize = 4096, check_server=False, options=set()):
     with tempfile.TemporaryDirectory() as prefix:
         # Make a few input files, create a fileset, make a few more files, make a file set, and cat them all to the output
         logging.info("do_dvs_fileset. infile_count=%d subinfile=%d suboutfile=%d ", infile_count, sub_infile_count, sub_outfile_count)
-        dc = dvs.DVS()
+        dc = dvs.DVS(options=options)
         dc.set_message("test_dvs_fileset in py.test")
         dc.set_author(os.getenv("USER"))
         dc.add_git_commit(dc.COMMIT_METHOD, auto=True)
@@ -58,16 +58,16 @@ def do_dvs_fileset(infile_count, sub_infile_count, sub_outfile_count, filesize =
 
         # Test lots of individual adds, each with an object
         if sub_infile_count:
-            d2 = dvs.DVS()
-            for num in range(1, sub_infile_count+1):
-                d2.add_local_paths(dc.COMMIT_BEFORE,[ make_local_tempfile(prefix, "sub-infile", num, filesize)])
+            d2 = dvs.DVS(options=options)
+            d2.add_local_paths(dc.COMMIT_BEFORE,
+                               [make_local_tempfile(prefix, "sub-infile", num, filesize) for num in range(1,sub_infile_count+1)])
             d2.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
             dc.add_child(dc.COMMIT_BEFORE, d2)
 
         if sub_outfile_count:
-            d3 = dvs.DVS()
-            for num in range(1, sub_outfile_count+1):
-                d3.add_local_paths(dc.COMMIT_AFTER, [ make_local_tempfile(prefix, "sub-outfile", num, filesize)])
+            d3 = dvs.DVS(options=options)
+            d3.add_local_paths(dc.COMMIT_AFTER,
+                               [make_local_tempfile(prefix, "sub-outfile", num, filesize) for num in range(1, sub_outfile_count+1)])
             d3.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
             dc.add_child(dc.COMMIT_AFTER, d3)
 
@@ -82,13 +82,17 @@ def test_dvs_commit_1000():
     # Transaction with 1000 inputs
     do_dvs_fileset(1000, 0, 0)
 
-def test_dvs_commit_1500():
+def test_dvs_commit_1500_fail():
     # Transaction with 1500 inputs. Should generate error
     try:
-        do_dvs_fileset(1500, 0, 0)
+        do_dvs_fileset(1500, 0, 0, options={dvs.OPTION_NO_AUTO_SUB_COMMIT:True})
         raise RuntimeError("DVS commit with >1000 objects should fail")
     except dvs.exceptions.DVSClientError as e:
         return
+
+def test_dvs_commit_1500_pass():
+    # Transaction with 1500 inputs, automatically making sub-commits. Should not generate error
+    do_dvs_fileset(1500, 0, 0)
 
 
 if __name__=="__main__":
