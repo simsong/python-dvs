@@ -7,6 +7,8 @@ import subprocess
 import os
 import inspect
 import sys
+import socket
+
 
 r"""
 The DVS class supports the following operations:
@@ -43,10 +45,12 @@ from .exceptions    import *
 API_ENDPOINT = "https://dasexperimental.ite.ti.census.gov/api/dvs"
 DEFAULT_TIMEOUT = 5.0
 
+debug_server = True
+
 # these get added to the endpoint
-API_V1 = {SEARCH:"/v1/search",
-          COMMIT:"/v1/commit",
-          DUMP:"/v1/dump" }
+API_V1 = {SEARCH: "/v1/search",
+          COMMIT: "/v1/commit",
+          DUMP  : "/v1/dump" }
 
 class DVS_Singleton:
     """The Python singleton pattern. There are many singleton objects,
@@ -332,11 +336,16 @@ class DVS():
         # Send the objects to the server and return the commit
         try:
             commit_url = self.api_endpoint + API_V1[COMMIT]
+            if debug_server:
+                print(f"POST {commit_url} data={str(data)[0:1000]}... (total {len(str(data))} bytes",file=sys.stderr)
             r = requests.post(commit_url,
-                              data=data,
-                              verify=self.verify,
+                              data    = data,
+                              verify  = self.verify,
                               timeout = self.timeout)
-        except requests.exceptions.Timeout:
+            if debug_server:
+                print(f"RESPONSE: {r} len(r.text)={len(r.text)}\n",file=sys.stderr)
+        except (requests.exceptions.Timeout, socket.timeout) as e:
+            print(str(e),file=sys.stderr)
             raise DVSServerTimeout(commit_url)
 
         logging.debug("response: %s",r)
