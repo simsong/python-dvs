@@ -18,7 +18,7 @@ import dvs
 
 import dvs.dvs_helpers
 import dvs.server
-import dvs.dvs_constants
+import dvs.dvs_constants as dvs_constants
 
 sys.path.append( dirname(__file__))
 from dvs_test_constants import DVS_DEMO_PATH
@@ -69,11 +69,13 @@ def test_store_commit(dbwriter_auth):
         warnings.warn("Cannot run without webmaint")
         return
 
-    update = dvs.dvs_helpers.get_file_observation_with_hash(DVS_DEMO_PATH)
+    update  = dvs.dvs_helpers.get_file_observation_with_hash(DVS_DEMO_PATH)
     objects = dvs.dvs_helpers.objects_dict([update])
 
     # make sure the update object is stored
     dvs.server.store_objects(dbwriter_auth,objects)
+
     # Do it
-    commit = {BEFORE:list(objects.keys())}
+    commit = {dvs_constants.COMMIT_BEFORE:list(objects.keys()),
+              dvs_constants.ATTRIBUTE_EPHEMERAL:"true" }
     dvs.server.store_commit(dbwriter_auth, commit)

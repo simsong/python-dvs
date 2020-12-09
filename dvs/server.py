@@ -116,7 +116,7 @@ def do_v2search(auth, *, search, debug=False):
 
     cmd += " LIMIT %s"
     vals.append(MAX_SEARCH_RESULTS)
-    
+
     rows = dbfile.DBMySQL.csfr(auth, cmd, vals, asDicts=True, debug=debug)
     # load the JSON...
     return [{**row, **{OBJECT:json.loads(row[OBJECT])}} for row in rows]
@@ -147,7 +147,7 @@ def search_api(auth):
         return f"Searches parameter must be a JSON-encoded list of dictionaries"
 
     responses = [{SEARCH:search,
-                 RESULTS:do_v2search(auth,search=search, debug=bottle.request.params.debug)}
+                 RESULTS:do_v2search(auth, search=search, debug=bottle.request.params.debug)}
                  for search in searches]
 
     bottle.response.content_type = 'text/json'
@@ -223,7 +223,7 @@ other methods return lists of objects
             if not all([is_hexadecimal(elem) for elem in objlist]):
                 raise ValueError(f"{check} contains a value that is not a hexadecimal hash")
             hashes.update(objlist)
-    
+
     if len(hashes)==0:
         raise ValueError("Commit does not include any hexhashes in the before, method or after sections")
     # Make sure that all of the hashes are in the database

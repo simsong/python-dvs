@@ -38,13 +38,12 @@ def s3loc():
     subprocess.call(['aws','s3','cp',DVS_DEMO_PATH,S3LOC1])
     yield S3LOC1
 
+
 def test_do_search(s3loc):
     """Search the file that was just registered and see if its hash is present"""
     hashes = dvs_helpers.hash_file( DVS_DEMO_PATH )
 
-    dc = dvs.DVS(verify=DEFAULT_VERIFY)
-    print(dc)
-
+    dc     = dvs.DVS( verify=DEFAULT_VERIFY )
     commit = dvs_cli.do_cp( dc, DVS_DEMO_PATH, s3loc)
 
     searches = dvs_cli.do_search(dc, [hashes[SHA1]], debug=True)
@@ -54,6 +53,8 @@ def test_do_search(s3loc):
                 result[OBJECT][FILE_HASHES][SHA1] == hashes[SHA1]):
                 logging.info("Found %s", hashes)
                 return
+
     warnings.warn("Searching for %s did not find result in:\n%s"
                   % (do_commit,json.dumps(searches,indent=4,default=str)))
+
     raise FileNotFoundError()

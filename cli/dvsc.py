@@ -211,6 +211,11 @@ def json_print(title,obj):
     print(json.dumps(obj,indent=4,default=str,sort_keys=True))
 
 
+def do_dumpobj(dc, hexhash, debug):
+    search_results = do_search(dc, hexhash, debug)
+    print(search_results)
+
+
 def do_cp(dc, src_path, dst_path):
     """Implement a file copy, with the fact of the copy recorded in the DVS"""
 
@@ -260,7 +265,8 @@ if __name__ == "__main__":
     group.add_argument("--search",   "-s", help="Search for information about the path", action='store_true')
     group.add_argument("--register", "-r", help="Register a file or path. ", action='store_true')
     group.add_argument("--commit",   "-c", help="Commit. Synonym for register", action='store_true')
-    group.add_argument("--dump",           help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
+    group.add_argument("--dumpdb",         help="Dump database. Optional arguments are LIMIT and OFFSET", action='store_true')
+    group.add_argument("--dumpobj",         help="Dump a single object that is uniquely specified.")
 
     group.add_argument("--cp",
                        help="Copy file1 to file2 and log in DVS. Also works for S3 files",
@@ -302,10 +308,12 @@ if __name__ == "__main__":
         if args.git:
             dc.add_git_commit( src=args.path[0])
         json_print( 'COMMIT', do_commit(dc, args.path))
-    elif args.dump:
+    elif args.dumpdb:
         limit  = int(args.path[0]) if len(args.path)>0 else None
         offset = int(args.path[1]) if len(args.path)>1 else None
         json_print( 'DUMP', dc.dump_objects(limit=limit, offset=offset))
+    elif args.dumpobj:
+        do_dumpobj(dc, args.dumpobj, debug=args.debug)
     elif args.last:
         objs = dc.dump_objects(limit=args.last, offset=0)
         if args.graph:

@@ -25,6 +25,8 @@ AWS_HEADER_SERVER="Server"
 DVS_OBJECT_CACHE_ENV='DVS_OBJECT_CACHE' # S3 location object cache
 DVS_AWS_S3_ACL_ENV='DVS_AWS_S3_ACL'     # ACL to specify when writing to object cache
 
+# Limits
+MAX_OBJECTS_LIST = 1000         # throw an error if >1000 objects in BEFORE, METHOD, or AFTER
 
 
 ID='id'
@@ -88,7 +90,7 @@ DURATION='duration'             # commit - how long the commit took (so we don't
 # Commit API
 API_OBJECTS='objects'
 API_COMMIT='commit'
-
+API_SEARCH_LIMIT=100            # don't return more than 100 objects
 
 # Dump
 DUMP='dump'
