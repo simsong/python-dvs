@@ -61,7 +61,7 @@ class DVS_Singleton:
         return getattr(DVS_Singleton.instance, name)
 
 class DVS():
-    def __init__(self, base=None, api_endpoint=None, verify=DEFAULT_VERIFY, debug=False, ACL=None, timeout=DEFAULT_TIMEOUT):
+    def __init__(self, base=None, api_endpoint=None, verify=DEFAULT_VERIFY, debug=False, ACL=None, timeout=DEFAULT_TIMEOUT, options=dict()):
         """Start a DVS transaction"""
         self.the_commit    = base if base is not None else {}
         self.file_obj_dict = {} # where the file objects will end up
@@ -70,6 +70,7 @@ class DVS():
         self.verify        = verify
         self.debug         = debug
         self.timeout       = timeout
+        self.options       = options
         # Copy over select constants
         for attrib in dir(dvs_constants):
             if attrib.startswith("COMMIT") or attrib.startswith("ATTRIBUTE"):
@@ -117,9 +118,20 @@ class DVS():
         """Basic method for adding an object to one of the lists """
         logging.debug('add(%s,%s)',which,dvs_debug_obj_str(obj))
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
+        assert isinstance(obj, dict)
         if which not in self.file_obj_dict:
             self.file_obj_dict[which] = list()
         self.file_obj_dict[which].append(obj)
+
+        while len(self.file_obj_dict[which]) > MAX_OBJECTS_LIST:
+            if OPTION_NO_AUTO_SUB_COMMIT in self.options:
+                raise DVSTooManyObjects(f"len(file_obj_dict[{which}])={(len(self.file_obj_dict[which]))} and OPTION_NO_AUTO_SUB_COMMIT set")
+            # Create a child commit and move these objects into it
+            child = DVS()
+            self.add_child( which, child)
+            for i in range(MAX_OBJECTS_LIST):
+                child.add( which, obj=self.file_obj_dict[which].pop())
+
 
     def add_git_commit(self, which=COMMIT_METHOD, *, url=None, commit=None, src=None, auto=False):
         """Add a pointer to a remote URL (typically a git commit)
@@ -218,10 +230,10 @@ class DVS():
             self.add( which, obj=obj)
 
 
-    def add_child(self, which, obj):
-        logging.debug('add(%s,%s)', which, obj)
+    def add_child(self, which, child):
+        logging.debug('add(%s,%s)', which, child)
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        self.children.append( (which, obj) )
+        self.children.append( (which, child) )
 
     def commit(self, *args, **kwargs):
         """Continue to build the commit.

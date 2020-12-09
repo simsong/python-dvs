@@ -77,6 +77,10 @@ SEARCH_ANY='*'
 ATTRIBUTE_EPHEMERAL="ephemeral"
 ATTRIBUTES=[ATTRIBUTE_EPHEMERAL]
 
+# Options
+OPTION_NO_AUTO_SUB_COMMIT='no_auto_sub_commit' # do not automatically create sub-commits
+
+
 # This is a duplicate SEARCH='search'                 # takes a single dict
 REMOTE_FQDN='remote_fqdn'       # fqdn observed of remote ip address
 REMOTE_ADDR='remote_addr'       # remote address for a commit
