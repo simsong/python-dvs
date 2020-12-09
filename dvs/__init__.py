@@ -249,17 +249,18 @@ class DVS():
                 if OPTION_NO_AUTO_SUB_COMMIT in self.options:
                     raise DVSTooManyObjects(f"len(file_obj_dict[{which}])={(len(self.file_obj_dict[which]))} and OPTION_NO_AUTO_SUB_COMMIT set")
 
-                # Create a child commit and move these objects into it
+                # Move all of the objects to the child list.
                 children = []
-                while len(self.file_obj_dict[which]) > MAX_OBJECTS_LIST:
+                while len(self.file_obj_dict[which]) > 0:
                     child = DVS()
-                    for i in range(MAX_OBJECTS_LIST):
+                    for i in range( min(MAX_OBJECTS_LIST), len(self.file_obj_dict[which])):
                         child.add( which, obj=self.file_obj_dict[which].pop())
                     children.append(child)
                 # Now add all of the children
                 for child in children:
                     self.add_child( which, child)
-                # If we added more than 1000 children, we will loop and children a child of all the children
+                # If we added more than 1000 children, we will loop and children when be made children of new children.
+                # This will scale to any number of objects, and the final children all will be at the same depth.
 
             # Add attributes in commit to the BEFORE, METHOD and AFTER objects
             for attrib in set(ATTRIBUTES).intersection(self.the_commit.keys()):
