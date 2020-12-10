@@ -181,8 +181,12 @@ class DVS():
         obj = { HEXHASH: commit, GIT_SERVER_URL: url}
         self.add(which, obj=obj)
 
+
     def get_search_endpoint(self, which):
         """Returns the DVS server search endpoint, or None if we do not need to search (because these are output files)"""
+        if OPTION_SEARCH not in self.options:
+            return None
+
         if (which==COMMIT_BEFORE
             or which==COMMIT_METHOD
             or (which==COMMIT_AFTER and OPTION_SEARCH_FOR_AFTERS in self.options)):
