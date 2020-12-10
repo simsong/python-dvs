@@ -42,7 +42,7 @@ TODO:
 
 from .dvs_constants import *
 from .dvs_helpers   import objects_dict,canonical_json,dvs_debug_obj_str
-from .observations  import get_s3objs_observations, get_file_observations, get_bucket_key
+from .observations  import get_s3objs_observations, get_file_observations, get_bucket_key, requests_retry_session
 from .exceptions    import *
 
 # This should be simplified to be a single API_ENDPOINT which handles v1/search v1/commit and v1/dump
@@ -50,7 +50,7 @@ from .exceptions    import *
 # hexhash,<<JSON_OBJECT>>\n
 
 API_ENDPOINT = "https://dasexperimental.ite.ti.census.gov/api/dvs"
-DEFAULT_TIMEOUT = 5.0
+DEFAULT_TIMEOUT = 10.0
 
 debug_server = True
 
@@ -357,8 +357,10 @@ class DVS():
         try:
             commit_url = self.api_endpoint + API_V1[COMMIT]
             if debug_server:
-                print(f"POST {commit_url} data={str(data)[0:1000]}... (total {len(str(data))} bytes",file=sys.stderr)
-            r = requests.post(commit_url,
+                print(f"POST {commit_url} data={str(data)[0:160]}... "
+                      f"(total {len(str(data))} bytes; {len(data[API_OBJECTS])} objects, 1 commit)",
+                      file=sys.stderr)
+            r = requests_retry_session().post(commit_url,
                               data    = data,
                               verify  = self.verify,
                               timeout = self.timeout)
@@ -386,7 +388,7 @@ class DVS():
         data = {'dump':json.dumps(dump_request, default=str)}
         try:
             dump_url = self.api_endpoint + API_V1[DUMP]
-            r = requests.post(dump_url, data=data, verify=self.verify, timeout=self.timeout)
+            r = requests_retry_session().post(dump_url, data=data, verify=self.verify, timeout=self.timeout)
         except requests.exceptions.Timeout as e:
             raise DVSServerTimeout(dump_url)
         if r.status_code==HTTP_OK:
@@ -398,7 +400,7 @@ class DVS():
                 'limit':limit}
         try:
             search_url = self.api_endpoint + API_V1[SEARCH]
-            r = requests.post(search_url, data=data, verify=self.verify, timeout=self.timeout)
+            r = requests_retry_session().post(search_url, data=data, verify=self.verify, timeout=self.timeout)
         except requests.exceptions.Timeout as e:
             raise DVSServerTimeout(search_url)
 
