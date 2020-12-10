@@ -25,6 +25,8 @@ from .exceptions import DVSServerError
 from .dvs_helpers import dvs_debug_obj_str
 
 
+
+
 DEFAULT_THREADS=20
 MAX_DEBUG_PRINT=260
 CACHE_CHECK_S3_MIN_FILE_SIZE    = 16*1024*1024 # if the file is smaller than 16MiB, don't check the server
@@ -33,6 +35,7 @@ CACHE_CHECK_LOCAL_MIN_FILE_SIZE = 64*1024*1024 # if the file is smaller than 64M
 # debug flags
 debug_hash_every_s3path   = False
 debug_hash_every_s3prefix = True
+debug_hash_server        = True
 
 def debug_str(s):
     """Return s if smaller than MAX_DEBUG_PRINT , otherwise print something more understandable"""
@@ -185,20 +188,32 @@ def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=DEFAULT
 
     # Get the ETag for all of the paths
     logging.info("getting tags for %s paths",len(s3paths))
+    if debug_hash_server:
+        print("Getting tags for %s paths",len(s3paths),file=sys.stderr)
+
     with Pool(threads) as p:
         rows = p.map(get_s3path_etag_bytes, s3paths)
-    s3path_etags = {row[0]:row[1] for row in rows} # make paths to etags
+    s3path_etags           = {row[0]:row[1] for row in rows} # make paths to etags
     s3path_content_lengths = {row[0]:row[2] for row in rows} # make paths to content-lengths
+    if debug_hash_server:
+        print(f"got tags. search_endpoint={search_endpoint}",file=sys.stderr)
 
     # This is (annoyingly) still single-threaded. For each object, execute a search
     # We could just do a single search for all of them..
+
     s3path_searches = dict()
     if search_endpoint is None:
-        logging.debug("Output files. will not use cache")
+        logging.debug("search_endpoint is None. Will not use cache")
+        if debug_hash_server:
+            print(f"Search_endpoint is None. will not use cache",file=sys.stderr)
+
     elif DVS_OBJECT_CACHE_ENV in os.environ:
         logging.debug("Running with DVS_OBJECT_CACHE. Not checking server for cached hash.")
+
     else:
-        logging.info("Checking server for %s paths",len(s3paths))
+        logging.info("Checking server for ss paths",len(s3paths))
+        if debug_hash_server:
+            print("Checking server for %s paths:",len(s3paths),file=sys.stderr)
         for s3path in s3paths:
             if s3path_content_lengths[s3path] > CACHE_CHECK_S3_MIN_FILE_SIZE:
                 objr =  server_s3search(s3path=s3path, s3path_etag=s3path_etags[s3path],
@@ -206,12 +221,14 @@ def get_s3file_observations(s3paths:list, *, search_endpoint:str, verify=DEFAULT
                 if objr:
                     s3path_searches[s3path] = objr
         logging.info("Got response on %s",len(s3path_searches))
+        if debug_hash_server:
+            print("len(s3path_searches)=",len(s3path_searches),file=sys.stderr);
 
     # Still need to parallelize this.
     # Use the StreamingBody() to download the object.
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html#S3.ObjectSummary.get
     # https://botocore.amazonaws.com/v1/documentation/api/latest/reference/response.html
-    # THis code is very similar to server_s3search above and should probably be factored into that.
+    # This code is very similar to server_s3search above and should probably be factored into that.
 
     # get the objects for the s3paths that we had
     objs            = [s3path_searches[s3path] for s3path in s3paths if s3path in s3path_searches]
