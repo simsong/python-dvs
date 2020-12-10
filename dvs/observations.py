@@ -174,7 +174,16 @@ def hash_s3obj(s3obj):
 
 
 def hash_s3path(s3path):
-    return hash_s3obj( s3path_to_s3obj( s3path ))
+    error = None
+    for retry_count in range(MAX_HTTP_RETRIES):
+        try:
+            return hash_s3obj( s3path_to_s3obj( s3path ))
+        except urllib3.exceptions.ProtocolError as e:
+            error = e
+            continue
+    print(f"s3path={s3path} e={str(e)}",file=sys.stderr)
+    raise e
+
 
 def get_s3objs_observations(s3objs:list, *, search_endpoint:str, verify=DEFAULT_VERIFY, threads=DEFAULT_THREADS):
     """Given a list of s3.Object or s3.ObjectSummary objects:.

@@ -358,7 +358,7 @@ class DVS():
             commit_url = self.api_endpoint + API_V1[COMMIT]
             if debug_server:
                 print(f"POST {commit_url} data={str(data)[0:160]}... "
-                      f"(total {len(str(data))} bytes; {len(data[API_OBJECTS])} objects, 1 commit)",
+                      f"(total {len(str(data))} bytes; {len(json.loads(data[API_OBJECTS]))} objects, 1 commit)",
                       file=sys.stderr)
             r = requests_retry_session().post(commit_url,
                               data    = data,
