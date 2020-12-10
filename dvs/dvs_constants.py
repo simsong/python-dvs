@@ -81,8 +81,9 @@ ATTRIBUTES=set([ATTRIBUTE_EPHEMERAL])
 
 # Options
 OPTION_NO_AUTO_SUB_COMMIT='no_auto_sub_commit' # do not automatically create sub-commits
+OPTION_SEARCH='search'          # search for observations
 OPTION_SEARCH_FOR_AFTERS='search_for_afters'   # search for afters in cache as well as befores and methods
-OPTIONS=set([OPTION_NO_AUTO_SUB_COMMIT, OPTION_SEARCH_FOR_AFTERS])
+OPTIONS=set([OPTION_SEARCH, OPTION_NO_AUTO_SUB_COMMIT, OPTION_SEARCH_FOR_AFTERS])
 
 
 # This is a duplicate SEARCH='search'                 # takes a single dict

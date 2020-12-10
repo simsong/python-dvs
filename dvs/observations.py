@@ -28,7 +28,6 @@ from .dvs_helpers import dvs_debug_obj_str
 
 DEFAULT_THREADS=20
 MAX_DEBUG_PRINT=260
-MAX_SEARCH_OBJECTS=5
 MAX_HTTP_RETRIES = 5
 CACHE_CHECK_LOCAL_MIN_FILE_SIZE = 64*1024*1024 # if the file is smaller than 64MiB, don't check the server
 DVS_SERVER_SEARCH_BATCH_SIZE    = 100 # batch size of searches
@@ -36,6 +35,12 @@ DVS_SERVER_SEARCH_BATCH_SIZE    = 100 # batch size of searches
 
 # Impelmentretries with requests
 # https://dev.to/ssbozy/python-requests-with-retries-4p03
+
+import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+
+
 def requests_retry_session( retries=MAX_HTTP_RETRIES,
                             backoff_factor=0.3,
                             status_forcelist=(500, 502, 504),
@@ -68,6 +73,25 @@ def debug_str(s):
 
 ################################################################
 ### s3 support routines
+
+
+def s3olen(s3obj):
+    """return the length of the object in AWS S3 referneces by the s3obj.
+    Note that if s3 is an s3.Object, then we use s3obj.content_length,
+    but if s3 is an s3.ObjectSummary, we use s3obj.size.
+    It would be nice if Amazon had been consistent.
+    """
+    try:
+        return s3obj.content_length
+    except AttributeError as e:
+        pass
+
+    try:
+        return s3obj.size
+    except AttributeError as e:
+        pass
+
+    raise RuntimeError(f"Unknown object {str(s3obj)} responds to {dir(s3obj)}")
 
 
 def get_bucket_key(loc):
@@ -107,18 +131,20 @@ def s3obj_to_s3path(s3obj):
 
 ################################################################
 
-def server_search_post(*, search_endpoint, search_dicts, verify=DEFAULT_VERIFY):
-    """Actually performs the server search. Handles search_dicts>server.MAX_SEARCH_OBJECTS"""
-    # For testing, use a stride of 5
+def server_search_post(*, search_endpoint, search_dicts, stride_length=MAX_SEARCH_OBJECTS, verify=DEFAULT_VERIFY):
+    """Actually performs the server search."""
     return_list = []
     search_dict_values = list(search_dicts.values())
-    for stride in range(0, len(search_dict_values), MAX_SEARCH_OBJECTS):
-        stride_dicts = search_dict_values[stride:stride+MAX_SEARCH_OBJECTS]
-        logging.debug("Search send: %d/%d%s", stride, len(search_dict_values), debug_str(stride_dicts))
-        print(json.dumps(stride_dicts))
+    for offset in range(0, len(search_dict_values), stride_length):
+        stride = search_dict_values[offset:offset+stride_length]
+
+        logging.debug("Search send: %d/%d%s", stride, len(search_dict_values), debug_str(stride))
+        print("..Search send: %d/%d len(stride)=%d" % (offset,len(search_dict_values),len(stride)),file=sys.stderr)
+        print("..search endpoint=",search_endpoint,file=sys.stderr)
         r = requests_retry_session().post(search_endpoint,
-                          data = {'searches':json.dumps(stride_dicts, default=str)},
+                          data = {'searches':json.dumps(stride, default=str)},
                           verify = verify)
+        print(f"Return. r.status_code={r.status_code} len(r.text)={len(r.text)}\n", file=sys.stderr)
         logging.debug(f"Return. r.status_code={r.status_code} len(r.text)={len(r.text)}")
         if r.status_code!=HTTP_OK:
             raise RuntimeError("Server response: %d %s" % (r.status_code,r.text))
@@ -151,7 +177,7 @@ def hash_s3path(s3path):
     return hash_s3obj( s3path_to_s3obj( s3path ))
 
 def get_s3objs_observations(s3objs:list, *, search_endpoint:str, verify=DEFAULT_VERIFY, threads=DEFAULT_THREADS):
-    """Given a list of s3objects...
+    """Given a list of s3.Object or s3.ObjectSummary objects:.
     1. If a search_endpoint is specified, send searches to the endpoint in batches of DVS_SERVER_SEARCH_BATCH_SIZE.
     2. For those objects that we coudln't find the hashehs on the sever, hash the s3 path. oO this in parallel too.
     3. Return a list of observations.
@@ -190,25 +216,40 @@ def get_s3objs_observations(s3objs:list, *, search_endpoint:str, verify=DEFAULT_
             print(f"Checking server for {len(s3objs)} paths",file=sys.stderr)
         s3objs_to_hash = []
         for offset in range(0, len(s3objs), DVS_SERVER_SEARCH_BATCH_SIZE):
+            print("\nOFFSET:",offset,file=sys.stderr)
+            stride = s3objs[offset:offset+DVS_SERVER_SEARCH_BATCH_SIZE]
             search_dicts = {ct :
                             { HOSTNAME:  DVS_S3_PREFIX + s3obj.Bucket().name,
                               DIRNAME:   os.path.dirname( s3obj.key),
                               FILENAME:  os.path.basename( s3obj.key),
-                              FILE_METADATA: {ST_SIZE  : s3obj.content_length,
+                              FILE_METADATA: {ST_SIZE  : s3olen(s3obj),
                                               ST_MTIME : int(s3obj.last_modified.timestamp()),
                                               ETAG     : clean_etag(s3obj.e_tag)},
                               ID: ct}
-                            for (ct,s3obj) in enumerate(s3objs,offset)}
+                            for (ct,s3obj) in enumerate( stride, offset)}
+
+            print("LEN SEARCH_DICTS=",len(search_dicts),file=sys.stderr)
             if debug_hash_server:
-                print(f"  Requesting search on {len(search_dicts)} objects")
-                rjson = server_search_post(search_endpoint = search_endpoint,
-                                           search_dicts = search_dicts,
-                                           verify = verify)
-                # every response is a success for which we do not need to hash.
-                results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in rjson}
+                print(f"  ** Requesting search on {len(search_dicts)} objects",file=sys.stderr)
+
+
+            rjson = server_search_post(search_endpoint = search_endpoint,
+                                       search_dicts = search_dicts,
+                                       stride_length = DVS_SERVER_SEARCH_BATCH_SIZE,
+                                       verify = verify)
+            rjson=[]
+
+
+            # every response is a success for which we do not need to hash.
+            results_by_searchid = {response[SEARCH][ID] : response[RESULTS] for response in rjson}
+            print(f" %% Response. count={len(results_by_searchid)}")
             unfound_offsets = set()
-            for (ct,s3obj) in enumerate(s3objs,offset):
-                unfound_objects.add(ct)
+
+            # See if we have observations from the server that match any of the observations
+            # we got from the server. If they do, use them, and remove them from the list of s3objs
+            # that need to be hashed.
+            for (ct,s3obj) in enumerate(stride,offset):
+                unfound_offsets.add(ct)
                 if ct in results_by_searchid:
                     for result in results:
                         objr = result[OBJECT]
