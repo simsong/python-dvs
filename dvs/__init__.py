@@ -8,6 +8,9 @@ import os
 import inspect
 import sys
 import socket
+import boto3
+from urllib.parse import urlparse
+from hashlib import sha1
 
 
 r"""
@@ -198,7 +201,6 @@ class DVS():
     def add_s3_paths_or_prefixes(self, which, s3pops, *, threads=DEFAULT_THREADS, extra=None):
         """Add a path or prefix from S3. If it is a prefix, add all it contains"""
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        import boto3
         s3paths = []
         for s3pop in s3pops:
             if s3pop.endswith('/'):
@@ -283,7 +285,7 @@ class DVS():
             self.the_commit[which] = list(objects.keys())
             all_objects   = {**all_objects, **objects}
 
-        if len(all_objects)==0:
+        if len(all_objects)==0 and len(self.children)==0:
             raise DVSCommitError("Will not commit with no BEFORE, METHOD, or AFTER objects")
 
         ### DEBUG CODE START
@@ -302,7 +304,6 @@ class DVS():
                 if attrib in self.the_commit:
                     child.set_attribute( attrib, self.the_commit[attrib] )
 
-
             child_commit = child.commit()
             if which not in self.the_commit:
                 self.the_commit[which] = []
@@ -315,10 +316,7 @@ class DVS():
         # If we are using the S3 object cache, then upload the object to S3 and return the object.
         if DVS_OBJECT_CACHE_ENV in os.environ:
             # https://github.com/boto/boto3/issues/894
-            import boto3
             boto3.set_stream_logger('boto3.resources', logging.INFO, format_string='%(message).1600s')
-            from urllib.parse import urlparse
-            from hashlib import sha1
 
             data_bytes = canonical_json(data).encode('utf-8')
             m = sha1()
