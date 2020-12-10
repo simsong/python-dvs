@@ -223,7 +223,7 @@ def do_cp(dc, src_path, dst_path):
     use_s3 = False
     if src_path.startswith("s3://"):
         use_s3  = True
-        dc.add_s3_paths(dc.COMMIT_BEFORE, [src_path])
+        dc.add_s3_paths_or_prefixes(dc.COMMIT_BEFORE, [src_path])
     else:
         dc.add_local_paths(dc.COMMIT_BEFORE, [src_path])
 
@@ -245,7 +245,7 @@ def do_cp(dc, src_path, dst_path):
         shutil.copyfile(src_path,dst_path)
 
     if dst_path.startswith("s3://"):
-        dc.add_s3_paths(dc.COMMIT_AFTER, [dst_path])
+        dc.add_s3_paths_or_prefixes(dc.COMMIT_AFTER, [dst_path])
     else:
         dc.add_local_paths(dc.COMMIT_AFTER, [dst_path])
     return dc.commit()

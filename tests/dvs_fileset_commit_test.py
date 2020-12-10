@@ -56,8 +56,9 @@ def do_dvs_fileset(infile_count, sub_infile_count, sub_outfile_count, filesize =
         dc.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
 
         # Test add_local_path with multiple objects
+        infiles = [make_local_tempfile(prefix, "infile", num, filesize) for num in range(1, infile_count) ]
         if infile_count:
-            dc.add_local_paths(dc.COMMIT_BEFORE, [make_local_tempfile(prefix, "infile", num, filesize) for num in range(1, infile_count) ] )
+            dc.add_local_paths(dc.COMMIT_BEFORE, infiles  )
 
         # Test lots of individual adds, each with an object
         if sub_infile_count:
@@ -67,14 +68,17 @@ def do_dvs_fileset(infile_count, sub_infile_count, sub_outfile_count, filesize =
             d2.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
             dc.add_child(dc.COMMIT_BEFORE, d2)
 
+        sub_outfiles = [make_local_tempfile(prefix, "sub-outfile", num, filesize) for num in range(1, sub_outfile_count+1)]
         if sub_outfile_count:
             d3 = dvs.DVS(options=options)
-            d3.add_local_paths(dc.COMMIT_AFTER,
-                               [make_local_tempfile(prefix, "sub-outfile", num, filesize) for num in range(1, sub_outfile_count+1)])
+            d3.add_local_paths(dc.COMMIT_AFTER, sub_outfiles)
             d3.set_attribute(dc.ATTRIBUTE_EPHEMERAL)
             dc.add_child(dc.COMMIT_AFTER, d3)
-
         dc.commit()
+
+
+        # Now let's make sure that the cache is operational
+
 
 
 def test_dvs_fileset_440():

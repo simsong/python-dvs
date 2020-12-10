@@ -21,7 +21,7 @@ dc.set_author()  - sets the COMMIT_AUTHOR
 dc.set_dataset() - sets the COMMIT_DATASET
 dc.add(which, obj=obj) - adds an object to COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER
 dc.add_git_commit(which, url=, commit=, src=) - adds a git commit to the commit
-dc.add_s3_paths(which, s3paths=) - adds s3 paths
+dc.add_s3_objs(which, s3objs=) - adds boto3 s3 objects
 dc.add_s3_paths_or_prefixes(which, s3paths=) - adds s3 paths or prefixes
 dc.add_local_paths(which, paths=) - adds local paths (filenames)
 dc.commit() - writes the transaction to the local store or the remote server
@@ -33,12 +33,16 @@ dc.set_attribute(attrib) - sets ATTRIBUTE_EPHEMERAL for the transaction and its 
 
 if >1000 objects are present in a before or after, a group commit needs to be created.
 
+TODO:
+* Make which an object
+* Create a class that represent each DVS object, rather than using a dictionary.
+
 
 """
 
 from .dvs_constants import *
 from .dvs_helpers   import objects_dict,canonical_json,dvs_debug_obj_str
-from .observations  import get_s3file_observations, get_file_observations, get_bucket_key
+from .observations  import get_s3objs_observations, get_file_observations, get_bucket_key
 from .exceptions    import *
 
 # This should be simplified to be a single API_ENDPOINT which handles v1/search v1/commit and v1/dump
@@ -91,9 +95,15 @@ class DVS():
 
     def set_attribute(self, attrib, value='true'):
         """Set the attribute in the current commit. The attribute will be set in children on commis."""
-        if attrib not in ATTRIBUTES:
+        if (attrib not in ATTRIBUTES) and (not attrib.lower().startswith("x-")):
             raise ValueError(f"{attrib} is not a valid DVS attribute")
         self.the_commit[attrib] = value
+
+    def set_option(self, option, value='true'):
+        if option not in OPTIONS:
+            raise ValueError(f"{option} is not a valid DVS option")
+        self.options[option] = value
+
 
     def dump(self,file=sys.stderr):
         print("DVS object ",id(self),file=file)
@@ -173,7 +183,9 @@ class DVS():
 
     def get_search_endpoint(self, which):
         """Returns the DVS server search endpoint, or None if we do not need to search (because these are output files)"""
-        if which==COMMIT_BEFORE or which==COMMIT_METHOD:
+        if (which==COMMIT_BEFORE
+            or which==COMMIT_METHOD
+            or (which==COMMIT_AFTER and OPTION_SEARCH_FOR_AFTERS in self.options)):
             return self.api_endpoint + API_V1[SEARCH]
         elif which==COMMIT_AFTER:
             return None
@@ -181,15 +193,20 @@ class DVS():
             raise ValueError(f"which is {which} and not COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER")
 
 
-    def add_s3_paths(self, which, s3paths, *, threads=DEFAULT_THREADS, extra=None):
+    def add_s3_objs(self, which, s3objs, *, threads=DEFAULT_THREADS, extra=None):
         """Add a set of s3 objects, possibly caching.
-        :param which: should we COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
-        :param s3paths: paths to add.
-        :param threads: how many threads to use. Currently ignored.
+        :param which: COMMIT_BEFORE, COMMIT_METHOD or COMMIT_AFTER
+        :param s3objs: boto3.resources.factory.s3.Object objects.
+        :param threads: how many threads to use for hashing.
+        :param extra: a dictionary of extra information to provide
 
         """
-        s3objs = get_s3file_observations( s3paths, search_endpoint = self.get_search_endpoint(which), threads=threads)
+        assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
+        assert isinstance(s3objs, list)
+        assert isinstance(threads, int)
+        s3objs = get_s3objs_observations( s3objs, search_endpoint = self.get_search_endpoint(which), threads=threads)
         if extra is not None:
+            assert isinstance(extra, dict)
             for s3obj in s3objs:
                 assert set.intersection(set(s3obj.keys()), set(extra.keys())) == set()
             s3objs = [{**s3obj, **extra} for s3obj in s3objs]
@@ -199,18 +216,19 @@ class DVS():
 
 
     def add_s3_paths_or_prefixes(self, which, s3pops, *, threads=DEFAULT_THREADS, extra=None):
-        """Add a path or prefix from S3. If it is a prefix, add all it contains"""
+        """
+        Add a path or prefix from S3. If it is a prefix, add all of the s3 objects underneath.
+        Internally, we get the boto3.resource.factory.s3.Object and put those in the array.
+        """
         assert which in [COMMIT_BEFORE, COMMIT_METHOD, COMMIT_AFTER]
-        s3paths = []
+        s3objs = []
         for s3pop in s3pops:
-            if s3pop.endswith('/'):
-                (bucket_name,prefix) = get_bucket_key(s3pop)
-                paths = [f's3://{bucket_name}/{s3object.key}'
-                         for s3object in boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix)]
-                s3paths.extend(paths)
+            (bucket_name, prefix) = get_bucket_key(s3pop)
+            if prefix.endswith('/'):
+                s3objs.extend( boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix) )
             else:
-                s3paths.append(s3pop)
-        self.add_s3_paths(which, s3paths, threads=threads, extra=extra)
+                s3objs.append( boto3.resource('s3').Object(bucket_name, prefix) )
+        self.add_s3_objs(which, s3objs, threads=threads, extra=extra)
 
 
     def add_local_paths(self, which, paths, extra=None):

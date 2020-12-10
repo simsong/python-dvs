@@ -77,10 +77,12 @@ SEARCH_ANY='*'
 
 # Attributes
 ATTRIBUTE_EPHEMERAL="ephemeral"
-ATTRIBUTES=[ATTRIBUTE_EPHEMERAL]
+ATTRIBUTES=set([ATTRIBUTE_EPHEMERAL])
 
 # Options
 OPTION_NO_AUTO_SUB_COMMIT='no_auto_sub_commit' # do not automatically create sub-commits
+OPTION_SEARCH_FOR_AFTERS='search_for_afters'   # search for afters in cache as well as befores and methods
+OPTIONS=set([OPTION_NO_AUTO_SUB_COMMIT, OPTION_SEARCH_FOR_AFTERS])
 
 
 # This is a duplicate SEARCH='search'                 # takes a single dict
