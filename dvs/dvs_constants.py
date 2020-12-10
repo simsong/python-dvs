@@ -8,7 +8,7 @@ The goal here is to avoid having quoted constants in the source code
 import multiprocessing
 
 HTTP_OK=200
-DEFAULT_THREADS = multiprocessing.cpu_count()
+DEFAULT_THREADS = multiprocessing.cpu_count()*2
 DEFAULT_VERIFY=True             # for https
 
 DVS_S3_PREFIX='s3://'
