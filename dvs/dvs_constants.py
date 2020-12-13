@@ -29,6 +29,8 @@ DVS_AWS_S3_ACL_ENV='DVS_AWS_S3_ACL'     # ACL to specify when writing to object 
 
 # Limits
 MAX_OBJECTS_LIST = 1000         # throw an error if >1000 objects in BEFORE, METHOD, or AFTER
+MAX_FILES = 100000                    # Throw an error if more than 100,000 files
+MAX_S3_FILES = 100000                    # Throw an error if more than 100,000 files
 
 
 ID='id'

@@ -80,7 +80,7 @@ def hash_filehandle(f):
         md5_hash.update(fb)
         count += len(fb)
         if count>next_gig:
-            print(f"  ... hashed {count:,} bytes",file=sys.stderr)
+            print(f"  ... PID {os.getpid()} hashed {count:,} bytes",file=sys.stderr)
             next_gig += 100_000_000
         fb = f.read(BLOCK_SIZE)
     logging.debug("End hashing %s. sha1=%s",f,sha1_hash.hexdigest())
