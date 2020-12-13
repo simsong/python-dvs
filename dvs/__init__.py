@@ -228,10 +228,19 @@ class DVS():
         s3objs = []
         for s3pop in s3pops:
             (bucket_name, prefix) = get_bucket_key(s3pop)
+            bucket = boto3.resource('s3').Bucket(bucket_name)
             if prefix.endswith('/'):
-                s3objs.extend( boto3.resource('s3').Bucket(bucket_name).objects.page_size(100).filter(Prefix=prefix) )
+                s3objs.extend( bucket.objects.page_size(100).filter(Prefix=prefix).limit(MAX_S3_FILES-1))
             else:
                 s3objs.append( boto3.resource('s3').Object(bucket_name, prefix) )
+            if len(s3objs) >= MAX_S3_FILES:
+                print(f"** ERROR **",file=sys.stderr)
+                print(f"add_s3_paths_or_prefixes asked to add > {MAX_S3_FILES} S3 objects. Break this into smaller transactions.",file=sys.stderr)
+                print(f"prefix              s3 objects")
+                for pre in s3pops:
+                    (b,p) = get_bucket_key(pre)
+                    print(f"{pre}    {len(list(bucket.objects.page_size(100).filter(Prefix=p)))}")
+                raise ValueError(f"Too many s3 objects added to commit")
         self.add_s3_objs(which, s3objs, threads=threads, extra=extra)
 
 

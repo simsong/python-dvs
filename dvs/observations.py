@@ -33,6 +33,7 @@ CACHE_CHECK_LOCAL_MIN_FILE_SIZE = 64*1024*1024 # if the file is smaller than 64M
 DVS_SERVER_SEARCH_BATCH_SIZE    = 100 # batch size of searches
 
 
+
 # Impelmentretries with requests
 # https://dev.to/ssbozy/python-requests-with-retries-4p03
 
@@ -198,6 +199,7 @@ def get_s3objs_observations(s3objs:list, *, search_endpoint:str, verify=DEFAULT_
     # https://stackoverflow.com/questions/52402421/retrieving-etag-of-an-s3-object-using-boto3-client
 
     assert isinstance(s3objs, list)
+    assert len(s3objs) < MAX_S3_FILES
 
     # Get the s3obj for all of the paths. This will give us the S3 Etag, length, and last access time
     # TODO: Could we have gotten this information when we did the original list?
@@ -309,6 +311,7 @@ def get_file_observations(paths:list, *, search_endpoint:str, verify=DEFAULT_VER
     logging.debug("paths 1: %s",paths)
     assert isinstance(paths,list)
     assert all([isinstance(path,str) for path in paths])
+    assert len(paths) < MAX_FILES
 
     # Get the metadata for each path once.
     metadata_for_path = {path:json_stat(path) for path in paths}
