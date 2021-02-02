@@ -348,17 +348,13 @@ class DVS():
         if DVS_OBJECT_CACHE_ENV in os.environ:
             # https://github.com/boto/boto3/issues/894
             boto3.set_stream_logger('boto3.resources', logging.INFO, format_string='%(message).1600s')
-
             data_bytes = canonical_json(data).encode('utf-8')
             m = sha1()
             m.update(data_bytes)
             hexhash = m.hexdigest()
             url = os.environ[DVS_OBJECT_CACHE_ENV]+'/'+hexhash
             p = urlparse(url)
-            if self.ACL:
-                boto3.resource('s3').Object(p.netloc, p.path[1:]).put(Body=data_bytes, ACL=self.ACL)
-            else:
-                boto3.resource('s3').Object(p.netloc, p.path[1:]).put(Body=data_bytes)
+            boto3.resource('s3').Object(p.netloc, p.path[1:]).put(Body=json.dumps({'source':'dvs', 'data':data}).encode('utf-8'), ACL=self.ACL)
             return {hexhash:data}
 
 
